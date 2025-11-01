@@ -23,16 +23,18 @@ services:
 
   # Interactive Brokers Gateway
   ib-gateway:
-    image: ghcr.io/unusualcode/ib-gateway:latest
+    image: gnzsnz/ib-gateway:latest
     container_name: ib-gateway
     env_file:
       - .env
     environment:
       - TWS_USERID=${IB_USERNAME}
-      - TWS_PASSWORD=${IB_PASSWORD}
+      - TWS_PASSWORD_FILE=/run/secrets/ib_password
       - TRADING_MODE=${IB_TRADING_MODE:-paper}
       - READ_ONLY_API=no
       - VNC_SERVER_PASSWORD=${VNC_PASSWORD:-password}
+    secrets:
+      - ib_password
     ports:
       - "4001:4001"  # IB Gateway API port (paper trading)
       - "4002:4002"  # IB Gateway API port (live trading)
@@ -85,3 +87,7 @@ networks:
 volumes:
   sqlite-data:
     driver: local
+
+secrets:
+  ib_password:
+    file: ./secrets/ib_password.txt

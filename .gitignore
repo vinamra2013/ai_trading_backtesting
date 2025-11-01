@@ -75,3 +75,5 @@ Thumbs.db
 # Keep directory structure with .gitkeep files
 !**/.gitkeep
 venv/
+# Secrets directory
+secrets/
