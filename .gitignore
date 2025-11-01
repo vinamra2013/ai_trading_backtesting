@@ -1,0 +1,77 @@
+# Environment Variables (SECRETS!)
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# LEAN
+.lean/
+
+# Data (too large for git)
+data/raw/**
+data/processed/**
+data/lean/**
+data/sqlite/**
+*.hdf5
+*.h5
+*.csv
+*.parquet
+
+# Results (generated files)
+results/**
+*.json
+*.html
+*.png
+*.pdf
+
+# Logs
+logs/**
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+.docker/
+*.dockerfile.swp
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Keep directory structure with .gitkeep files
+!**/.gitkeep
+venv/
