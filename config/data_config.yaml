@@ -1,0 +1,27 @@
+# Data Manager Configuration
+
+data_source: "Interactive Brokers"
+resolution: Daily
+security_type: Equity
+market: USA
+
+# Data validation settings
+validation:
+  check_missing_dates: true
+  check_ohlcv_consistency: true
+  check_zero_volume: true
+  max_gap_days: 5
+  min_quality_score: 0.90
+
+# Data storage settings
+storage:
+  root_dir: "data"
+  cache_enabled: true
+  compression: true
+
+# Update schedule (for incremental updates)
+update_schedule:
+  enabled: false
+  frequency: "daily"
+  time: "18:00"  # After market close
+  timezone: "America/New_York"

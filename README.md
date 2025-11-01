@@ -251,13 +251,42 @@ lean --version
 - ✅ Test thoroughly before live trading
 - ✅ Set up risk management limits (Epic 6)
 
+## Claude Skills
+
+This project includes two powerful Claude Skills for programmatic automation:
+
+### data-manager Skill
+Download, validate, and report on historical market data from Interactive Brokers.
+
+```bash
+# Automatic invocation via Claude
+"Download SPY data for the last 2 years and validate quality"
+
+# Or use scripts directly
+python scripts/download_data.py --symbols SPY AAPL --start 2020-01-01 --end 2024-12-31
+python scripts/data_quality_check.py --symbols SPY AAPL --report-format json
+```
+
+### backtest-runner Skill
+Run backtests with realistic IB cost models, analyze performance, and optimize parameters.
+
+```bash
+# Automatic invocation via Claude
+"Run a backtest on MyStrategy from 2020 to 2024"
+
+# Or use scripts directly
+python scripts/run_backtest.py --algorithm algorithms/MyStrategy --start 2020-01-01 --end 2024-12-31
+```
+
+See [examples/README.md](examples/README.md) for detailed usage examples.
+
 ## Next Steps
 
-1. ✅ **Epic 1**: Development Environment Setup (Current)
-2. **Epic 2**: Interactive Brokers Integration
-3. **Epic 3**: Data Management Pipeline
-4. **Epic 4**: Backtesting Infrastructure
-5. **Epic 5**: Live Trading Engine
+1. ✅ **Epic 1**: Development Environment Setup
+2. ✅ **Epic 2**: Interactive Brokers Integration (Partial - IB Gateway configured)
+3. ✅ **Epic 3**: Data Management Pipeline (Complete)
+4. 🚧 **Epic 4**: Backtesting Infrastructure (Core complete, advanced features configured)
+5. **Epic 5**: Live Trading Engine (Next priority)
 6. **Epic 6**: Risk Management System
 7. **Epic 7**: Monitoring & Observability
 8. **Epic 8**: Deployment & Operations

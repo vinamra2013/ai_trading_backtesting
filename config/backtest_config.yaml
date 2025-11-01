@@ -1,0 +1,23 @@
+# Backtest Runner Configuration
+
+# Default backtest settings
+backtest:
+  initial_capital: 100000
+  data_resolution: Daily
+  benchmark: SPY
+
+# Cost model selection
+cost_model: ib_standard
+
+# Results storage
+results:
+  output_dir: "results/backtests"
+  save_trades: true
+  save_equity_curve: true
+  generate_report: true
+
+# Performance settings
+performance:
+  parallel_enabled: true
+  max_workers: 8
+  cache_results: true

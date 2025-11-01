@@ -1,0 +1,40 @@
+# IB Cost Model Configuration (US-4.2)
+
+# Interactive Brokers Standard Commission Structure
+ib_standard:
+  # Commission
+  commission_per_share: 0.005  # $0.005 per share
+  minimum_commission: 1.00     # $1.00 minimum per order
+  maximum_commission_rate: 0.01  # 1% of trade value max
+
+  # SEC fees (for sells only)
+  sec_fee_rate: 0.0000278  # $27.80 per $1M
+
+  # Slippage modeling
+  slippage:
+    market_order_bps: 5  # 5 basis points (0.05%)
+    limit_order_bps: 0   # No slippage for limit orders
+    fill_probability: 0.95  # 95% fill rate for limit orders
+
+  # Bid-ask spread simulation
+  spread:
+    enabled: true
+    typical_bps: 2  # 2 basis points typical spread
+    use_midpoint: true
+    spread_factor: 0.5  # Use midpoint + half spread
+
+# IB Pro (Tiered Pricing) - Lower rates for high volume
+ib_pro:
+  commission_per_share: 0.0035
+  minimum_commission: 0.35
+  maximum_commission_rate: 0.01
+  sec_fee_rate: 0.0000278
+  slippage:
+    market_order_bps: 5
+    limit_order_bps: 0
+    fill_probability: 0.95
+  spread:
+    enabled: true
+    typical_bps: 2
+    use_midpoint: true
+    spread_factor: 0.5

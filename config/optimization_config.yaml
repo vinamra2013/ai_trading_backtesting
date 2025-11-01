@@ -1,0 +1,39 @@
+# Parameter Optimization Configuration (US-4.4)
+
+# Default parameter ranges (example)
+parameters:
+  sma_period: [10, 20, 50, 100, 200]
+  rsi_threshold: [30, 40, 50, 60, 70]
+  stop_loss: [0.02, 0.05, 0.10]
+  take_profit: [0.05, 0.10, 0.15]
+
+# Optimization settings
+optimization:
+  # Objective metric to optimize
+  metric: sharpe_ratio  # Options: sharpe_ratio, sortino_ratio, total_return, profit_factor
+
+  # Data split for in-sample/out-of-sample
+  train_test_split: 0.6  # 60% train, 40% test
+
+  # Parallel execution
+  parallel_cores: 8  # 0 = use all available cores
+
+  # Overfitting detection
+  overfitting:
+    enabled: true
+    min_test_performance_ratio: 0.7  # Test must be ≥70% of train
+    warn_if_below: 0.8  # Warn if test < 80% of train
+
+  # Results
+  top_n_results: 10  # Report top 10 parameter combinations
+  save_all_results: true
+
+# Training period (if not using train_test_split)
+train_period:
+  start: "2020-01-01"
+  end: "2022-12-31"
+
+# Testing period
+test_period:
+  start: "2023-01-01"
+  end: "2024-12-31"

@@ -1,0 +1,39 @@
+# Walk-Forward Analysis Configuration (US-4.5)
+
+# Window configuration
+windows:
+  train_months: 6  # Training window size in months
+  test_months: 2   # Testing window size in months
+  step_months: 2   # How far to move window each iteration
+  anchor: false    # true = anchored walk-forward, false = rolling
+
+# Parameter ranges (uses same format as optimization_config.yaml)
+parameters:
+  sma_period: [10, 20, 50, 100]
+  rsi_threshold: [30, 40, 50]
+
+# Optimization settings for each window
+optimization:
+  metric: sharpe_ratio
+  parallel_cores: 8
+
+# Parameter drift detection
+drift_detection:
+  enabled: true
+  alert_threshold: 0.30  # Alert if optimal params change >30%
+  track_metrics:
+    - optimal_parameters
+    - sharpe_ratio
+    - max_drawdown
+
+# Results
+results:
+  save_per_window: true
+  aggregate_statistics: true
+  generate_charts: true
+  output_dir: "results/walkforward"
+
+# Date range for analysis
+date_range:
+  start: "2020-01-01"
+  end: "2024-12-31"
