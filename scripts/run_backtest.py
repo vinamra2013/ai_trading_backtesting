@@ -3,6 +3,7 @@
 Backtest Runner Script - Programmatic interface to LEAN backtesting.
 
 US-4.1: Easy Backtest Execution
+Track A: Enhanced with structured parsing
 """
 
 import argparse
@@ -14,6 +15,9 @@ from datetime import datetime
 from pathlib import Path
 import uuid
 
+# Import backtest parser
+from backtest_parser import parse_backtest
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -23,7 +27,7 @@ class BacktestRunner:
 
     def run(self, algorithm: str, start: str, end: str, cost_model: str = "ib_standard"):
         """
-        Run LEAN backtest.
+        Run LEAN backtest with structured parsing.
 
         Args:
             algorithm: Path to algorithm directory
@@ -32,7 +36,7 @@ class BacktestRunner:
             cost_model: Cost model to use
 
         Returns:
-            Result dictionary with backtest ID and metrics
+            Result dictionary with backtest ID, parsed metrics, and trades
         """
         logger.info(f"Running backtest for {algorithm}")
         logger.info(f"Period: {start} to {end}")
@@ -47,25 +51,54 @@ class BacktestRunner:
             backtest_id = str(uuid.uuid4())
             timestamp = datetime.now().isoformat()
 
+            # Parse backtest output into structured format
+            logger.info("Parsing backtest output...")
+            try:
+                parsed_results = parse_backtest(
+                    result.stdout,
+                    backtest_id,
+                    algorithm,
+                    start,
+                    end
+                )
+                logger.info(f"✓ Parsed {parsed_results.get('trade_count', 0)} trades")
+            except Exception as e:
+                logger.warning(f"Failed to parse backtest output: {e}")
+                parsed_results = {
+                    "backtest_id": backtest_id,
+                    "algorithm": algorithm,
+                    "period": {"start": start, "end": end},
+                    "parse_error": str(e)
+                }
+
+            # Combine parsed results with metadata
+            result_data = {
+                **parsed_results,
+                "cost_model": cost_model,
+                "timestamp": timestamp,
+                "raw_stdout": result.stdout,
+                "status": "completed"
+            }
+
             # Save results
             results_dir = Path("results/backtests")
             results_dir.mkdir(parents=True, exist_ok=True)
 
             result_file = results_dir / f"{backtest_id}.json"
-            result_data = {
-                "backtest_id": backtest_id,
-                "algorithm": algorithm,
-                "start": start,
-                "end": end,
-                "cost_model": cost_model,
-                "timestamp": timestamp,
-                "stdout": result.stdout,
-                "status": "completed"
-            }
-
             result_file.write_text(json.dumps(result_data, indent=2))
+
             logger.info(f"✓ Backtest completed: {backtest_id}")
             logger.info(f"Results saved to: {result_file}")
+
+            # Print summary
+            if "metrics" in result_data:
+                metrics = result_data["metrics"]
+                logger.info("=== Performance Summary ===")
+                logger.info(f"Total Return: {metrics.get('total_return', 0)*100:.2f}%")
+                logger.info(f"Sharpe Ratio: {metrics.get('sharpe_ratio', 0):.2f}")
+                logger.info(f"Max Drawdown: {metrics.get('max_drawdown', 0)*100:.2f}%")
+                logger.info(f"Win Rate: {metrics.get('win_rate', 0)*100:.2f}%")
+                logger.info(f"Total Trades: {metrics.get('trade_count', 0)}")
 
             return result_data
 

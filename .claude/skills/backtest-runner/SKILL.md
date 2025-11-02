@@ -20,46 +20,69 @@ Programmatic interface for running backtests, analyzing results, optimizing para
 ### Run a Backtest
 
 ```bash
-# Using LEAN CLI
-lean backtest algorithms/MyStrategy \
-  --start 20200101 \
-  --end 20241231
+# Using LEAN CLI directly
+lean backtest algorithms/MyStrategy
 
-# Or programmatically
-python scripts/run_backtest.py \
+# Using Claude helper (recommended for AI)
+python scripts/claude_backtest_helper.py \
   --algorithm algorithms/MyStrategy \
   --start 2020-01-01 \
-  --end 2024-12-31 \
-  --cost-model ib_standard
+  --end 2024-12-31
+
+# With parameters
+python scripts/claude_backtest_helper.py \
+  --algorithm algorithms/MyStrategy \
+  --param sma_period 20 \
+  --param rsi_threshold 30
 ```
 
-### Analyze Results
+### Natural Language Examples
 
-```bash
-python scripts/analyze_backtest.py \
-  --result results/backtests/latest.json \
-  --output results/analysis/report.html
-```
+When Claude receives requests like:
+- "Run a backtest on MyStrategy from 2020 to 2024"
+- "Test the algorithm with SMA period 50"
+- "Compare results with different RSI thresholds"
+
+Claude should:
+1. Use `claude_backtest_helper.py` for simple runs
+2. Parse LEAN output and extract metrics
+3. Provide human-readable summaries
+4. Compare results across parameter variations
 
 ### Optimize Parameters
 
 ```bash
-python scripts/optimize_strategy.py \
+# Grid search optimization
+python scripts/optimize_parameters.py \
+  --algorithm algorithms/MyStrategy \
+  --params "sma_period:10,20,50;rsi_threshold:30,40,50" \
+  --metric sharpe_ratio \
+  --start 2020-01-01 \
+  --end 2024-12-31
+
+# With train/test split for overfitting detection
+python scripts/optimize_parameters.py \
   --algorithm algorithms/MyStrategy \
   --params "sma_period:10,20,50;threshold:0.01,0.02,0.05" \
   --metric sharpe_ratio \
-  --parallel 8
+  --start 2020-01-01 \
+  --end 2024-12-31 \
+  --train-test-split 0.6
 ```
 
-### Walk-Forward Analysis
+### Natural Language Optimization Examples
 
-```bash
-python scripts/walk_forward.py \
-  --algorithm algorithms/MyStrategy \
-  --train-months 6 \
-  --test-months 2 \
-  --params "sma_period:10,20,50"
-```
+When Claude receives requests like:
+- "Optimize SMA period from 10 to 100, step 10"
+- "Find best RSI threshold between 30 and 70"
+- "Test all combinations of period and threshold"
+
+Claude should:
+1. Parse parameter ranges from natural language
+2. Convert to `--params` format
+3. Run `optimize_parameters.py`
+4. Interpret results and report top combinations
+5. Flag overfitting warnings if present
 
 ## Cost Models
 
@@ -196,14 +219,39 @@ Generated reports include:
 - `config/optimization_config.yaml`: Parameter ranges and settings
 - `config/walkforward_config.yaml`: Walk-forward analysis settings
 
+## Viewing Results in Dashboard
+
+All backtest and optimization results are viewable in the Streamlit monitoring dashboard:
+
+```bash
+# Start dashboard (if not already running)
+./scripts/start.sh
+
+# Access at http://localhost:8501
+```
+
+### Dashboard Features
+
+**Backtests Tab:**
+- List all backtest runs with summary metrics
+- View detailed backtest results and equity curves
+- Examine trade-by-trade log with P&L breakdown
+- Compare multiple backtests side-by-side
+
+**Optimization Tab:**
+- List all optimization runs
+- View parameter combination results table
+- Interactive parameter heatmaps for 2D analysis
+- Overfitting analysis with train/test comparison
+
 ## Scripts
 
 - `scripts/run_backtest.py`: Execute backtests programmatically
-- `scripts/analyze_backtest.py`: Calculate performance metrics
-- `scripts/generate_report.py`: Create HTML/JSON reports
-- `scripts/optimize_strategy.py`: Parameter grid search
-- `scripts/walk_forward.py`: Walk-forward validation
-- `scripts/cost_model.py`: IB commission and slippage calculator
+- `scripts/backtest_parser.py`: Parse LEAN output to structured JSON
+- `scripts/claude_backtest_helper.py`: Claude-friendly backtest interface
+- `scripts/compare_backtests.py`: Compare multiple backtest results
+- `scripts/optimize_parameters.py`: Parameter grid search optimization
+- `monitoring/app.py`: Streamlit dashboard for result visualization
 
 ## Dependencies
 
@@ -213,10 +261,39 @@ Generated reports include:
 - multiprocessing for parallel optimization
 - jinja2 for HTML report templates
 
+## Troubleshooting
+
+### Common Issues
+
+**Backtest Fails:**
+- Check algorithm syntax: `python -m py_compile algorithms/MyStrategy/main.py`
+- Verify data exists for symbols and date range
+- Check LEAN logs: `docker compose logs lean`
+
+**Parsing Fails:**
+- LEAN output format may have changed
+- Check `scripts/backtest_parser.py` regex patterns
+- Manually inspect raw stdout in result JSON
+
+**Dashboard Not Showing Results:**
+- Verify results saved to `results/backtests/` or `results/optimizations/`
+- Check JSON file format matches expected structure
+- Restart dashboard: `docker compose restart monitoring`
+
+### Getting Help
+
+Claude can help with:
+- Converting natural language to CLI commands
+- Interpreting backtest results and metrics
+- Comparing performance across parameter values
+- Identifying overfitting or data issues
+- Suggesting parameter ranges to test
+
 ## Notes
 
 - All backtests use realistic IB cost model by default
 - Parallel optimization uses all CPU cores unless specified
-- Walk-forward analysis prevents look-ahead bias
-- Reports saved to `results/` directory
+- Results automatically saved with UUID for tracking
+- Dashboard provides real-time access to all results
 - Equity curves and metrics cached for comparison
+- Failed backtests logged but don't stop optimization runs
