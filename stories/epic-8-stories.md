@@ -91,10 +91,10 @@
 
 ---
 
-### [~] US-8.4: Health Monitoring
+### [X] US-8.4: Health Monitoring
 **As an operator, I need health monitoring**
 
-**Status:** Partially Complete
+**Status:** ✅ Complete
 **Estimate:** 4 hours (remaining work)
 **Priority:** P1 (High)
 
@@ -103,40 +103,40 @@
 - [X] Pre-deployment health check in start_live_trading.sh
 - [X] Docker auto-restart on failure (restart: unless-stopped)
 - [X] Log health check results
-- [ ] Runtime health monitoring endpoint (/health)
-- [ ] Health check dashboard page in Streamlit
-- [ ] HTTP 200 if healthy, 503 if unhealthy
-- [ ] Checks: IB connection, disk space, memory, database connectivity
+- [X] Runtime health monitoring endpoint (/health)
+- [X] Health check dashboard page in Streamlit
+- [X] HTTP 200 if healthy, 503 if unhealthy
+- [X] Checks: IB connection, disk space, memory, database connectivity
 
 **Completed:**
 - Docker Compose health checks for IB Gateway (every 30s)
 - Pre-deployment IB Gateway connectivity validation
 - Container restart policies
-
-**Remaining Work:**
-- Add /health endpoint to monitoring app
-- Create Streamlit health dashboard page
-- Add system metrics monitoring (disk, memory)
+- Health monitoring endpoint and dashboard
+- System metrics monitoring (disk, memory, CPU)
+- Database connectivity checks
+- Network connectivity validation
+- File permissions monitoring
 
 ---
 
-### [ ] US-8.5: Backup & Restore
+### [X] US-8.5: Backup & Restore
 **As an operator, I need backup & restore**
 
-**Status:** Not Started
+**Status:** ✅ Complete
 **Estimate:** 4 hours
 **Priority:** P2 (Medium)
 
 **Acceptance Criteria:**
-- [ ] Backup script: ./scripts/backup.sh
-- [ ] Backs up:
+- [X] Backup script: ./scripts/backup.sh
+- [X] Backs up:
   - Database (data/sqlite/trades.db)
   - Configuration files (config/*.yaml, .env)
   - Algorithm code (algorithms/)
-- [ ] Automated daily backups
-- [ ] Restore script: ./scripts/restore.sh
-- [ ] Backup retention: 30 days
-- [ ] Compression support (tar.gz)
+- [X] Automated daily backups
+- [X] Restore script: ./scripts/restore.sh
+- [X] Backup retention: 30 days
+- [X] Compression support (tar.gz)
 
 **Implementation Approach:**
 - Simple file copy to backup directory with timestamp
@@ -150,14 +150,14 @@
 - [X] US-8.1: Automated deployment (complete)
 - [X] US-8.2: Configuration management (complete)
 - [X] US-8.3: Database persistence (complete)
-- [~] US-8.4: Health monitoring (4h remaining)
-- [ ] US-8.5: Backup/restore (4h remaining)
+- [X] US-8.4: Health monitoring (complete)
+- [X] US-8.5: Backup/restore (complete)
 - [X] Deployment scripts tested and functional
 - [X] Configuration management verified
 - [X] Database schema created and tested
-- [~] Health checks partially functional (Docker level, need app level)
-- [ ] Backup/restore validated
-- [X] Documentation complete for completed items
-- [ ] Epic demo completed
+- [X] Health checks fully functional (Docker + app level)
+- [X] Backup/restore validated
+- [X] Documentation complete for all items
+- [X] Epic demo completed
 
-**Completion Status:** 70% (17 of 24 items complete)
+**Completion Status:** 100% (24 of 24 items complete)

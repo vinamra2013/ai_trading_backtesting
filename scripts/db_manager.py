@@ -272,6 +272,23 @@ class DBManager:
                 )
             """)
 
+            # Performance metrics table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS performance_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    metric_type TEXT NOT NULL CHECK(metric_type IN (
+                        'ORDER_LATENCY', 'DATA_FEED_LATENCY', 'BACKTEST_TIME',
+                        'MEMORY_USAGE', 'CPU_USAGE', 'DISK_USAGE', 'DATABASE_LATENCY'
+                    )),
+                    metric_name TEXT NOT NULL,
+                    metric_value REAL NOT NULL,
+                    unit TEXT NOT NULL,
+                    algorithm TEXT,
+                    additional_data TEXT
+                )
+            """)
+
             # Create indexes for performance
             logger.info("Creating indexes...")
 
@@ -309,6 +326,11 @@ class DBManager:
             # Emergency stops indexes
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_emergency_stops_algorithm ON emergency_stops(algorithm)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_emergency_stops_timestamp ON emergency_stops(timestamp)")
+
+            # Performance metrics indexes
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_timestamp ON performance_metrics(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_type ON performance_metrics(metric_type)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_algorithm ON performance_metrics(algorithm)")
 
             # Initialize default trading state values
             cursor.execute("""
@@ -608,6 +630,152 @@ class DBManager:
                 'algorithm': algorithm,
                 'timestamp': datetime.now().isoformat()
             }
+
+    def record_performance_metric(
+        self,
+        metric_type: str,
+        metric_name: str,
+        metric_value: float,
+        unit: str,
+        algorithm: Optional[str] = None,
+        additional_data: Optional[Dict] = None
+    ) -> bool:
+        """
+        Record a performance metric.
+
+        Args:
+            metric_type: Type of metric (ORDER_LATENCY, DATA_FEED_LATENCY, etc.)
+            metric_name: Name of the metric
+            metric_value: Value of the metric
+            unit: Unit of measurement (ms, seconds, %, MB, etc.)
+            algorithm: Algorithm name (optional)
+            additional_data: Additional context data (optional)
+
+        Returns:
+            True if successful
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO performance_metrics
+                    (metric_type, metric_name, metric_value, unit, algorithm, additional_data)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    metric_type,
+                    metric_name,
+                    metric_value,
+                    unit,
+                    algorithm,
+                    str(additional_data) if additional_data else None
+                ))
+                return True
+        except Exception as e:
+            logger.error(f"Failed to record performance metric: {e}")
+            return False
+
+    def get_performance_metrics(
+        self,
+        metric_type: Optional[str] = None,
+        metric_name: Optional[str] = None,
+        algorithm: Optional[str] = None,
+        hours_back: int = 24,
+        limit: int = 1000
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve performance metrics with optional filters.
+
+        Args:
+            metric_type: Filter by metric type
+            metric_name: Filter by metric name
+            algorithm: Filter by algorithm
+            hours_back: How many hours back to look
+            limit: Maximum number of records
+
+        Returns:
+            List of performance metric dictionaries
+        """
+        query = """
+            SELECT * FROM performance_metrics
+            WHERE timestamp >= datetime('now', '-{} hours')
+        """.format(hours_back)
+        params = []
+
+        if metric_type:
+            query += " AND metric_type = ?"
+            params.append(metric_type)
+        if metric_name:
+            query += " AND metric_name = ?"
+            params.append(metric_name)
+        if algorithm:
+            query += " AND algorithm = ?"
+            params.append(algorithm)
+
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_latest_performance_metrics(
+        self,
+        metric_type: Optional[str] = None,
+        algorithm: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get latest performance metrics for each metric type/name combination.
+
+        Args:
+            metric_type: Filter by metric type
+            algorithm: Filter by algorithm
+
+        Returns:
+            Dictionary mapping metric keys to latest values
+        """
+        query = """
+            SELECT metric_type, metric_name, metric_value, unit, algorithm, timestamp
+            FROM performance_metrics
+            WHERE timestamp >= datetime('now', '-24 hours')
+        """
+        params = []
+
+        if metric_type:
+            query += " AND metric_type = ?"
+            params.append(metric_type)
+        if algorithm:
+            query += " AND algorithm = ?"
+            params.append(algorithm)
+
+        query += """
+            AND timestamp = (
+                SELECT MAX(timestamp)
+                FROM performance_metrics p2
+                WHERE p2.metric_type = performance_metrics.metric_type
+                AND p2.metric_name = performance_metrics.metric_name
+                AND p2.algorithm = performance_metrics.algorithm
+            )
+            ORDER BY metric_type, metric_name
+        """
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            result = {}
+            for row in rows:
+                key = f"{row['metric_type']}_{row['metric_name']}"
+                if row['algorithm']:
+                    key += f"_{row['algorithm']}"
+                result[key] = {
+                    'value': row['metric_value'],
+                    'unit': row['unit'],
+                    'timestamp': row['timestamp']
+                }
+            
+            return result
 
     def vacuum(self) -> None:
         """
