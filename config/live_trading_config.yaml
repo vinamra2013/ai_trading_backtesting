@@ -1,0 +1,62 @@
+# Live Trading Configuration
+# Configuration for production algorithmic trading system
+
+# Algorithm settings
+algorithm:
+  path: "algorithms/sample_strategy"
+  name: "SampleStrategy"
+  auto_restart: true
+  health_check_interval: 60  # seconds
+
+# Trading hours (America/New_York)
+trading_hours:
+  timezone: "America/New_York"
+  market_open: "09:30"
+  market_close: "16:00"
+  pre_market_start: "04:00"
+  after_hours_end: "20:00"
+  enforce_hours: true
+
+# Order execution
+order_execution:
+  queue_pre_market_orders: true
+  retry_failed_orders: true
+  max_retries: 3
+  retry_backoff_seconds: [5, 10, 20]  # exponential backoff
+  order_timeout_seconds: 300
+
+# Position tracking
+position_tracking:
+  sync_interval_seconds: 300  # 5 minutes
+  reconciliation_enabled: true
+  reconciliation_interval_seconds: 300  # 5 minutes
+  alert_on_mismatch: true
+
+# End-of-day procedures
+eod_procedures:
+  enabled: true
+  liquidation_time: "15:55"  # 5 minutes before market close
+  liquidate_all_positions: true
+  cancel_all_orders: true
+  generate_daily_report: true
+  send_alerts: true
+
+# Logging
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_file: "/app/logs/live_trading.log"
+  log_trades: true
+  log_positions: true
+  log_risk_events: true
+
+# Database
+database:
+  path: "/app/data/sqlite/trades.db"
+  backup_enabled: true
+  backup_interval_hours: 24
+
+# Monitoring
+monitoring:
+  enabled: true
+  streamlit_update_interval: 5  # seconds
+  metrics_update_interval: 60  # seconds

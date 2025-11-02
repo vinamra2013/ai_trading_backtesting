@@ -4,8 +4,11 @@ Algorithmic trading system built on QuantConnect's LEAN engine with Interactive 
 
 ## Architecture
 
-- **LEAN Engine**: QuantConnect's algorithmic trading engine
+**LEAN-Native Implementation**: All trading logic runs inside LEAN algorithms with integrated risk management.
+
+- **LEAN Engine**: QuantConnect's algorithmic trading engine (backtesting + live trading)
 - **Interactive Brokers**: Broker connectivity (paper/live trading)
+- **Risk Management**: Position limits, loss limits, concentration controls (library)
 - **HDF5 Storage**: Efficient historical data management
 - **Streamlit Dashboard**: Real-time monitoring and analytics
 - **Docker**: Containerized deployment

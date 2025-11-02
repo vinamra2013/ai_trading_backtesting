@@ -75,8 +75,9 @@ with col3:
 st.markdown("---")
 
 # Tabs for different views
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Dashboard",
+    "💼 Live Trading",
     "📜 Trade Log",
     "📈 Performance",
     "⚙️ Settings"
@@ -84,7 +85,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 with tab1:
     st.header("Dashboard Overview")
-    st.info("👋 Welcome! The platform is ready. Start by deploying a trading strategy.")
+    st.info("👋 Welcome! Use `./scripts/start_live_trading.sh` to begin trading.")
 
     # Placeholder chart
     st.subheader("Equity Curve")
@@ -103,6 +104,32 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
 with tab2:
+    st.header("💼 Live Trading")
+
+    # Query database for live trading data
+    import sys
+    sys.path.append('/app')
+    try:
+        from scripts.db_manager import DBManager
+        db = DBManager('/app/data/sqlite/trades.db')
+
+        st.subheader("Open Positions")
+        positions_data = db.get_positions()
+        if positions_data:
+            st.dataframe(pd.DataFrame(positions_data), use_container_width=True)
+        else:
+            st.info("No open positions")
+
+        st.subheader("Recent Orders")
+        orders_data = db.get_orders(limit=20)
+        if orders_data:
+            st.dataframe(pd.DataFrame(orders_data), use_container_width=True)
+        else:
+            st.info("No orders yet")
+    except Exception as e:
+        st.warning(f"Database not available: {e}")
+
+with tab3:
     st.header("Trade Log")
     st.info("No trades yet. Deploy a strategy to see trades here.")
 
@@ -117,7 +144,7 @@ with tab2:
     })
     st.dataframe(df, use_container_width=True)
 
-with tab3:
+with tab4:
     st.header("Performance Metrics")
 
     col1, col2 = st.columns(2)

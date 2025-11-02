@@ -1,0 +1,72 @@
+# Risk Management Configuration
+# Comprehensive risk controls for live trading system
+
+# Position size limits
+position_limits:
+  enabled: true
+  max_position_size_pct: 10  # percentage of portfolio
+  min_position_size: 100  # minimum dollar value
+  max_position_value: null  # null = no limit, or specify dollar amount
+  check_before_entry: true
+
+# Loss limits
+loss_limits:
+  enabled: true
+  daily_loss_limit_pct: 2  # percentage of portfolio
+  check_interval_seconds: 60
+  auto_liquidate: true  # automatically close all positions on breach
+  require_manual_override: true  # require manual action to resume trading
+  alert_threshold_pct: 1.5  # send alert before hitting limit
+
+# Concentration limits
+concentration_limits:
+  enabled: true
+  max_concurrent_positions: 5  # maximum number of open positions
+  max_sector_exposure_pct: 30  # percentage of portfolio per sector
+  max_single_stock_pct: 20  # percentage of portfolio per stock
+  allow_exits_when_at_limit: true  # allow closing positions when at limit
+
+# Emergency stop
+emergency_stop:
+  enabled: true
+  script_path: "/app/scripts/emergency_stop.sh"
+  auto_triggers:
+    - loss_limit_breach
+    - connection_lost_minutes: 5
+    - margin_call
+  confirmation_required: false  # if true, requires manual confirmation
+
+# Risk metrics
+risk_metrics:
+  enabled: true
+  update_frequency_seconds: 300  # 5 minutes
+  var:  # Value at Risk
+    confidence_levels: [0.95, 0.99]
+    lookback_days: 252  # 1 trading year
+    method: "historical"  # historical, parametric, monte_carlo
+  correlation:
+    lookback_days: 60  # 3 months
+    alert_threshold: 0.8  # alert if portfolio correlation > threshold
+  heat:  # Portfolio heat (risk exposure)
+    max_heat_pct: 50  # maximum portfolio heat percentage
+    alert_threshold_pct: 40  # alert threshold
+
+# Alerts
+alerts:
+  enabled: true
+  channels:
+    - type: "log"
+      severity: ["INFO", "WARNING", "CRITICAL"]
+    # Additional channels can be added (email, SMS, etc.)
+  critical_events:
+    - emergency_stop
+    - loss_limit_breach
+    - position_limit_breach
+    - connection_lost
+
+# Circuit breakers
+circuit_breakers:
+  enabled: true
+  max_orders_per_minute: 10  # rate limiting
+  max_order_value: 50000  # maximum single order value in dollars
+  cool_down_seconds: 60  # cooldown period after breaker trips

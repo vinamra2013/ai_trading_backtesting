@@ -2,6 +2,8 @@
 
 **Epic Description:** Build programmatic APIs and Claude Skills for AI agents to interact with the trading platform for backtesting, optimization, deployment, and monitoring.
 
+**Architecture Note:** APIs work with LEAN engine - algorithms are LEAN Python files, backtests use `lean backtest` command, live deployment uses `lean live deploy` command.
+
 **Time Estimate:** 50 hours
 **Priority:** P0 (Critical for AI-driven workflow)
 **Dependencies:** Epic 4 (Backtesting), Epic 5 (Live Trading), Epic 6 (Risk Management)
@@ -24,8 +26,10 @@
 - [ ] Progress callbacks
 - [ ] Error handling with meaningful messages
 
-**Notes:**
--
+**Implementation Notes:**
+- Uses `lean backtest` command under the hood to execute LEAN algorithm
+- Wrapper function parses LEAN CLI output and returns structured results
+- Supports passing LEAN algorithm path and configuration parameters
 
 ---
 
@@ -43,8 +47,10 @@
 - [ ] API: `get_equity_curve(backtest_id)` returns time series
 - [ ] All data in machine-readable format (JSON/dict)
 
-**Notes:**
--
+**Implementation Notes:**
+- Reads from `results/backtests/{backtest_id}.json` (saved by LEAN backtest)
+- Parses LEAN algorithm output for performance metrics
+- Queries database for detailed trade/position history if available
 
 ---
 
@@ -62,8 +68,11 @@
 - [ ] Progress tracking
 - [ ] Can specify constraints (max drawdown, min win rate)
 
-**Notes:**
--
+**Implementation Notes:**
+- Generates LEAN parameter configurations from param_ranges
+- Calls `lean optimize` command or runs backtests across parameter combinations
+- Parses results and ranks by optimization_metric
+- Uses LEAN's native optimization or implements wrapper for custom algorithms
 
 ---
 
@@ -81,8 +90,11 @@
 - [ ] Rollback to previous strategy
 - [ ] Returns deployment status
 
-**Notes:**
--
+**Implementation Notes:**
+- Deploys LEAN algorithms via `lean live deploy` command
+- Validates LEAN algorithm syntax and dependencies before deployment
+- Supports hot-swap by stopping current algorithm and starting replacement
+- Maintains backup of previous algorithm for rollback capability
 
 ---
 
@@ -100,8 +112,10 @@
 - [ ] API: `get_system_health()` returns connection status, errors
 - [ ] WebSocket stream for real-time updates (optional)
 
-**Notes:**
--
+**Implementation Notes:**
+- Reads from database tables populated by LEAN algorithm (positions, trades, orders)
+- LEAN algorithm populates db_logger tables in real-time during live trading
+- Provides query interfaces for current state and historical data from database
 
 ---
 
@@ -118,8 +132,10 @@
 - [ ] API: `get_data_quality_report(symbols)` checks for gaps/issues
 - [ ] Caching handled transparently
 
-**Notes:**
--
+**Implementation Notes:**
+- Wrapper around LEAN's data management (download, query, cache)
+- Supports querying LEAN-formatted data from `data/` directory
+- Download functionality uses LEAN CLI data download features
 
 ---
 
@@ -137,29 +153,33 @@
 - [ ] Highlights winner by specified metric
 - [ ] Export to report format
 
-**Notes:**
--
+**Implementation Notes:**
+- Compares backtest results from LEAN backtest JSON files
+- Extracts performance metrics from LEAN algorithm output
+- Generates comparison matrix and ranking by selected metrics
 
 ---
 
 ### [ ] US-9.8: Claude Skills for Common Tasks
 **As a developer, I need Claude Skills for common tasks**
 
-**Status:** Not Started
-**Estimate:** 12 hours
+**Status:** Partially Complete
+**Estimate:** 12 hours (reduced - 2 skills already exist)
 **Priority:** P1 (High)
 
 **Acceptance Criteria:**
-- [ ] Skill: "data-manager" (download, cache, validate data)
-- [ ] Skill: "backtest-runner" (run backtest, get results)
+- [X] Skill: "data-manager" (download, cache, validate data) - EXISTS
+- [X] Skill: "backtest-runner" (run backtest, get results) - EXISTS
 - [ ] Skill: "parameter-optimizer" (optimize and rank)
 - [ ] Skill: "strategy-deployer" (deploy to paper/live)
 - [ ] Skill: "performance-monitor" (get current status)
 - [ ] Each skill has clear interface and examples
 - [ ] Skills documented in /skills directory
 
-**Notes:**
--
+**Implementation Notes:**
+- data-manager and backtest-runner skills already implemented and integrated
+- Remaining skills build on existing API layer from US-9.1 through US-9.6
+- Each skill provides natural language interface to underlying Python APIs
 
 ---
 
