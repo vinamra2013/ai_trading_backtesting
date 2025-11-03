@@ -19,12 +19,14 @@ from typing import Optional
 from datetime import datetime
 from ib_insync import IB, util
 
-# Configure logging
+# Configure logging with dynamic path
+log_dir = os.getenv('LOG_DIR', os.path.join(os.getcwd(), 'logs'))
+os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(
     level=os.getenv('LOG_LEVEL', 'INFO'),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/app/logs/ib_connection.log'),
+        logging.FileHandler(os.path.join(log_dir, 'ib_connection.log')),
         logging.StreamHandler()
     ]
 )

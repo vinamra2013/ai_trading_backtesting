@@ -23,14 +23,19 @@ from pathlib import Path
 from typing import List, Optional
 from dotenv import load_dotenv
 from ib_insync import IB, Stock, util
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.ib_connection import IBConnectionManager
 
 # Setup logging
+log_dir = os.path.join(os.getcwd(), 'logs')
+os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/app/logs/data_download.log'),
+        logging.FileHandler(os.path.join(log_dir, 'data_download.log')),
         logging.StreamHandler()
     ]
 )
@@ -72,20 +77,28 @@ class DataDownloader:
         load_dotenv(env_file)
 
         self.ib_manager = None
-        self.output_dir = Path(os.getenv('BACKTRADER_DATA_FOLDER', '/app/data')) / 'csv'
+        # Use relative path or environment variable for data directory
+        data_folder = os.getenv('BACKTRADER_DATA_FOLDER', os.path.join(os.getcwd(), 'data'))
+        self.output_dir = Path(data_folder) / 'csv'
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"DataDownloader initialized. Output dir: {self.output_dir}")
 
-    def connect(self) -> bool:
+    def connect(self, host: str = None) -> bool:
         """
         Connect to IB Gateway
+
+        Args:
+            host: IB Gateway host (default: from env or 'ib-gateway')
 
         Returns:
             bool: True if connected successfully
         """
         try:
-            self.ib_manager = IBConnectionManager(readonly=True)
+            # Use localhost if running outside Docker, ib-gateway if inside
+            if host is None:
+                host = os.getenv('IB_HOST', 'localhost')
+            self.ib_manager = IBConnectionManager(host=host, readonly=True)
             return self.ib_manager.connect()
         except Exception as e:
             logger.error(f"Failed to connect to IB: {e}")
