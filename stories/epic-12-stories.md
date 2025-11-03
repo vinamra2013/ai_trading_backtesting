@@ -63,7 +63,7 @@ class CerebroEngine:
 
 ---
 
-### [ ] US-12.2: Performance Analyzers
+### [✅] US-12.2: Performance Analyzers
 **As a developer, I need performance metrics matching LEAN's output**
 
 **Status:** ✅ Complete
@@ -111,22 +111,22 @@ drawdown = strat.analyzers.drawdown.get_analysis()
 
 ---
 
-### [ ] US-12.3: IB Commission Models
+### [✅] US-12.3: IB Commission Models
 **As a developer, I need IB commission schemes in Backtrader**
 
-**Status:** 🔄 Pending
+**Status:** ✅ Complete
 **Estimate:** 12 hours
 **Priority:** P0
 
 **Acceptance Criteria:**
-- [ ] Create `scripts/commission_schemes.py` module
-- [ ] IB Standard commission class ($0.005/share, $1 min)
-- [ ] IB Pro commission class ($0.0035/share, $0.35 min)
-- [ ] SEC fee calculation ($27.80 per $1M on sells)
-- [ ] Slippage implementation (5 bps market, 0 bps limit)
-- [ ] Commission scheme selection from config
-- [ ] Unit tests comparing to LEAN cost models
-- [ ] Documentation with IB pricing references
+- [✅] Create `scripts/commission_schemes.py` module
+- [✅] IB Standard commission class ($0.005/share, $1 min)
+- [✅] IB Pro commission class ($0.0035/share, $0.35 min)
+- [✅] SEC fee calculation ($27.80 per $1M on sells)
+- [✅] Slippage implementation (5 bps market, 0 bps limit)
+- [✅] Commission scheme selection from config
+- [✅] Unit tests comparing to LEAN cost models
+- [✅] Documentation with IB pricing references
 
 **Technical Notes:**
 ```python
@@ -196,23 +196,23 @@ cerebro.broker.set_slippage_perc(
 
 ---
 
-### [ ] US-12.4: Backtest Execution Script
+### [✅] US-12.4: Backtest Execution Script
 **As a developer, I need to run backtests programmatically**
 
-**Status:** 🔄 Pending
+**Status:** ✅ Complete
 **Estimate:** 12 hours
 **Priority:** P0
 
 **Acceptance Criteria:**
-- [ ] Rewrite `scripts/run_backtest.py` for Backtrader
-- [ ] CLI arguments: algorithm, start/end dates, cost model
-- [ ] Load strategy from Python module dynamically
-- [ ] Configure commission scheme from argument
-- [ ] Execute backtest and capture results
-- [ ] Save results to `results/backtests/{uuid}.json`
-- [ ] Generate performance report (text and JSON)
-- [ ] Error handling and logging
-- [ ] Support for multiple data feeds (multi-symbol backtests)
+- [✅] Rewrite `scripts/run_backtest.py` for Backtrader
+- [✅] CLI arguments: algorithm, start/end dates, cost model
+- [✅] Load strategy from Python module dynamically
+- [✅] Configure commission scheme from argument
+- [✅] Execute backtest and capture results
+- [✅] Save results to `results/backtests/{uuid}.json`
+- [✅] Generate performance report (text and JSON)
+- [✅] Error handling and logging
+- [✅] Support for multiple data feeds (multi-symbol backtests)
 
 **Technical Notes:**
 ```python
@@ -402,20 +402,20 @@ def plot_equity_curve(results):
 
 ---
 
-### [ ] US-12.7: Configuration Management
+### [✅] US-12.7: Configuration Management
 **As a developer, I need Backtrader configs in YAML files**
 
-**Status:** 🔄 Pending
+**Status:** ✅ Complete
 **Estimate:** 4 hours
 **Priority:** P2
 
 **Acceptance Criteria:**
-- [ ] Update `config/backtest_config.yaml` for Backtrader
-- [ ] Remove LEAN-specific settings
-- [ ] Add Backtrader-specific settings (cerebro params)
-- [ ] Update `config/cost_config.yaml` with commission classes
-- [ ] Configuration validation on load
-- [ ] Documentation for all config parameters
+- [✅] Update `config/backtest_config.yaml` for Backtrader
+- [✅] Remove LEAN-specific settings
+- [✅] Add Backtrader-specific settings (cerebro params)
+- [✅] Update `config/cost_config.yaml` with commission classes
+- [✅] Configuration validation on load
+- [✅] Documentation for all config parameters
 
 **Technical Notes:**
 ```yaml
