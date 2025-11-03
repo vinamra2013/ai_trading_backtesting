@@ -19,11 +19,11 @@ Algorithmic trading platform built on **Backtrader** (open-source) with Interact
 source venv/bin/activate
 ```
 
-All Python commands (pip, lean, python scripts) MUST run within the virtual environment.
+All Python commands (pip, python scripts) MUST run within the virtual environment.
 
 ## Docker Architecture
 
-The platform uses a 4-service Docker architecture orchestrated via docker-compose.yml:
+The platform uses a 4-service Docker architecture orchestrated via [docker-compose.yml](docker-compose.yml):
 
 1. **backtrader**: Backtrader trading engine (Python 3.12 + Backtrader 1.9.78.123)
 2. **ib-gateway**: Interactive Brokers Gateway (headless) - handles broker connectivity
@@ -60,42 +60,46 @@ IB credentials are managed through `.env` file and Docker secrets:
 
 ### Connection Architecture
 
-`scripts/ib_connection.py` provides `IBConnectionManager` class with:
+[scripts/ib_connection.py](scripts/ib_connection.py) provides `IBConnectionManager` class with:
 - **ib_insync-based** connection manager (fully implemented)
 - Exponential backoff retry (3 attempts: 1s, 2s, 4s)
 - Health checks every 30 seconds
 - Context manager support for automatic connection lifecycle
 - Port 4001 for paper trading, 4002 for live (default: 4001)
 
-## Backtrader Engine Commands
+## Backtrader Commands
 
-All Backtrader commands run inside the Docker container:
+All Backtrader operations run via Python scripts inside or outside Docker:
 
 ```bash
 # Test IB connection
 docker exec backtrader-engine python /app/scripts/ib_connection.py
 
 # Download historical data
-docker exec backtrader-engine python /app/scripts/download_data.py \
+source venv/bin/activate
+python scripts/download_data.py \
   --symbols SPY AAPL --start 2024-01-01 --end 2024-12-31 --validate
 
 # Run backtest
-docker exec backtrader-engine python /app/scripts/run_backtest.py \
-  --strategy strategies/sma_crossover.py \
+source venv/bin/activate
+python scripts/run_backtest.py \
+  --strategy strategies.sma_crossover.SMACrossover \
   --symbols SPY --start 2024-01-01 --end 2024-12-31
 
-# Optimize parameters
-lean optimize algorithms/my_algorithm
+# Optimize parameters (Epic 14 - pending)
+python scripts/optimize_strategy.py \
+  --strategy strategies.sma_crossover.SMACrossover \
+  --param-ranges "sma_short:10-30,sma_long:40-80"
 
 # Deploy to live trading
-lean live deploy algorithms/my_algorithm
+./scripts/start_live_trading.sh
 ```
 
 ## Data Management
 
 ### Download Historical Data
 
-Use `scripts/download_data.py` wrapper around LEAN CLI:
+Use [scripts/download_data.py](scripts/download_data.py) for data downloads via ib_insync:
 
 ```bash
 source venv/bin/activate
@@ -106,7 +110,8 @@ python scripts/download_data.py --symbols SPY AAPL \
 
 The script:
 - Requires IB credentials in `.env` file
-- Converts YYYY-MM-DD to YYYYMMDD format
+- Connects to IB Gateway via ib_insync
+- Downloads data directly from Interactive Brokers
 - Supports multiple symbols (comma-separated)
 - Data types: Trade, Quote
 - Resolutions: Daily, Hour, Minute, Second
@@ -118,7 +123,6 @@ The script:
 data/
 ├── raw/        # Downloaded market data
 ├── processed/  # Cleaned/transformed data
-├── lean/       # LEAN-formatted data
 └── sqlite/     # Trade history database
 ```
 
@@ -133,9 +137,9 @@ source venv/bin/activate
 
 The script will:
 - Validate IB credentials in `.env`
-- Check algorithm exists
-- Deploy via `lean live deploy` with IB integration
-- Run in detached mode
+- Check strategy exists
+- Deploy to Backtrader with IB integration
+- Run in detached mode (or foreground based on config)
 
 ### Stop Live Trading
 
@@ -153,48 +157,51 @@ If you need to immediately liquidate all positions and stop trading:
 
 This will:
 - Query database for open positions
-- Liquidate each position via `lean live liquidate`
+- Liquidate each position via Backtrader
 - Stop the algorithm
 - Log emergency event
 
-### LEAN Algorithm Structure
+### Backtrader Strategy Structure
 
-Live trading algorithms live in `algorithms/live_strategy/`:
-- `main.py` - Main algorithm with trading logic
+Live trading strategies live in [strategies/](strategies/):
+- `base_strategy.py` - Base strategy template with risk management
 - `risk_manager.py` - Risk management library (position/loss/concentration limits)
 - `db_logger.py` - Database logging for monitoring
+- `sma_crossover.py` - Example strategy
+- `sma_crossover_risk_managed.py` - Example with full risk management
 
-The algorithm uses LEAN's native features:
-- `self.Portfolio` for position tracking
-- `self.MarketOrder()` / `self.LimitOrder()` for orders
-- `self.Schedule.On()` for EOD liquidation at 3:55 PM
-- Risk checks before every order
+Strategies use Backtrader's native features:
+- `self.broker` for position tracking and cash management
+- `self.buy()` / `self.sell()` / `self.close()` for orders
+- `bt.Strategy` base class with `__init__()` and `next()` methods
+- Risk checks via `BaseStrategy` inheritance
 
 ## Backtesting
 
 ### Run Backtest
 
-Use `scripts/run_backtest.py` for programmatic execution:
+Use [scripts/run_backtest.py](scripts/run_backtest.py) for programmatic execution:
 
 ```bash
 source venv/bin/activate
 python scripts/run_backtest.py \
-  --algorithm algorithms/my_strategy \
+  --strategy strategies.sma_crossover.SMACrossover \
   --start 2020-01-01 --end 2024-12-31 \
-  --cost-model ib_standard
+  --cash 100000 \
+  --symbols SPY
 ```
 
 Results saved to `results/backtests/{uuid}.json` with:
 - Backtest ID (UUID)
-- Algorithm path
+- Strategy path
 - Time period
-- Cost model used
-- Full stdout from LEAN
+- Commission model used
+- Full performance metrics (Sharpe, drawdown, returns, etc.)
 - Completion status
 
-### Cost Models
+### Commission Models
 
-Configured in `config/cost_config.yaml`:
+Configured in [config/cost_config.yaml](config/cost_config.yaml):
 
 **ib_standard** (default):
 - Commission: $0.005/share, $1.00 minimum
@@ -208,7 +215,7 @@ Configured in `config/cost_config.yaml`:
 
 ### Backtest Configuration
 
-`config/backtest_config.yaml`:
+[config/backtest_config.yaml](config/backtest_config.yaml):
 - Initial capital: $100,000
 - Default resolution: Daily
 - Benchmark: SPY
@@ -228,14 +235,16 @@ Dashboard has read-only access to:
 - `results/` - Backtest outputs
 - `logs/` - Application logs
 
+**Note**: Dashboard integration with Backtrader backtest results is pending (US-12.6 from Epic 12).
+
 ## Configuration Files
 
-Critical config files in `config/`:
+Critical config files in [config/](config/):
 - `backtest_config.yaml` - Backtest runner settings
 - `cost_config.yaml` - IB commission/slippage models
 - `data_config.yaml` - Data download settings
-- `optimization_config.yaml` - Parameter optimization
-- `walkforward_config.yaml` - Walk-forward analysis
+- `optimization_config.yaml` - Parameter optimization (Epic 14)
+- `walkforward_config.yaml` - Walk-forward analysis (Epic 14)
 
 ## Project Rules
 
@@ -251,20 +260,51 @@ Critical config files in `config/`:
 
 ## Current Implementation Status
 
-**Completed** (Epic 1-6):
-- Development environment with LEAN CLI v1.0.221
-- Full Docker orchestration (4 services)
-- IB Gateway connection framework (credentials-ready)
-- Data download pipeline via LEAN CLI
-- Backtest execution with IB cost models
-- Monitoring dashboard infrastructure
-- **Live trading LEAN algorithm** (`algorithms/live_strategy/main.py`)
-- **Risk management library** (position limits, loss limits, concentration)
-- **Database logging** (orders, positions, P&L, risk events)
-- **Emergency stop capability** (`./scripts/emergency_stop.sh`)
-- **Deployment scripts** (`start_live_trading.sh`, `stop_live_trading.sh`)
+**Completed Epics**:
+- ✅ **Epic 11**: Migration Foundation (100%)
+  - Docker architecture migrated to Backtrader
+  - IB connection framework via ib_insync
+  - Data pipeline operational
+  - Project structure established
 
-See `stories/epic-5-stories.md` and `stories/epic-6-stories.md` for details.
+**Partially Completed Epics**:
+- 🔄 **Epic 12**: Core Backtesting Engine (87.5%)
+  - ✅ Cerebro engine configuration
+  - ✅ Analyzers and performance metrics
+  - ✅ Commission models (IB Standard, IB Pro)
+  - ✅ Backtest execution script
+  - ✅ Result parser
+  - ⏳ US-12.6: Monitoring dashboard integration (pending)
+
+- 🔄 **Epic 13**: Algorithm Migration & Risk (37.5%)
+  - ✅ Base strategy template
+  - ✅ Risk management framework
+  - ✅ Example risk-managed strategy
+  - ⏳ Additional strategy migrations (pending)
+  - ⏳ Live trading deployment (pending)
+  - ⏳ Database logger integration (pending)
+  - ⏳ Strategy testing (pending)
+
+**Pending Epics**:
+- 📋 **Epic 14**: Advanced Features (0%)
+  - Parameter optimization
+  - Walk-forward analysis
+  - Live trading enhancements
+  - Claude Skills completion
+
+- 📋 **Epic 15**: Testing & Validation (0%)
+  - Unit tests
+  - Integration tests
+  - Paper trading validation
+  - Performance validation
+
+- 🔄 **Epic 16**: Documentation & Cleanup (In Progress)
+  - Documentation updates
+  - LEAN dependency removal
+  - Code cleanup
+  - Production cutover
+
+See [stories/epic-12-stories.md](stories/epic-12-stories.md), [stories/epic-13-stories.md](stories/epic-13-stories.md), etc. for details.
 
 ## Architecture Notes
 
@@ -272,14 +312,14 @@ See `stories/epic-5-stories.md` and `stories/epic-6-stories.md` for details.
 
 ```
 monitoring → sqlite
-lean → ib-gateway, sqlite
+backtrader → ib-gateway, sqlite
 ```
 
 All services restart automatically (`restart: unless-stopped`) unless explicitly stopped.
 
 ### Volume Mounts
 
-- `lean` service mounts: algorithms/, config/, data/, results/, logs/
+- `backtrader` service mounts: strategies/, scripts/, config/, data/, results/, logs/
 - `monitoring` service has read-only access to data/, results/, logs/
 - `sqlite` service mounts data/sqlite/ for persistence
 
@@ -292,9 +332,148 @@ Health check runs every 30s via `nc -z localhost 4001`:
 
 ## Claude Skills
 
-Two specialized skills available for automation:
+Three specialized skills available for automation:
 
-**data-manager**: Download and validate market data from IB
+**data-manager**: Download and validate market data from IB via ib_insync
 **backtest-runner**: Execute backtests with performance analysis
+**parameter-optimizer**: Optimize strategy parameters (Epic 14)
 
 These auto-invoke when Claude detects related natural language requests.
+
+## Strategy Development Guide
+
+### Creating a New Strategy
+
+1. **Inherit from BaseStrategy** (recommended for risk management):
+   ```python
+   from strategies.base_strategy import BaseStrategy
+   import backtrader as bt
+
+   class MyStrategy(BaseStrategy):
+       params = (
+           ('param1', 20),
+       )
+
+       def __init__(self):
+           # Initialize indicators
+           self.sma = bt.indicators.SMA(self.data.close, period=self.params.param1)
+
+       def next(self):
+           # Strategy logic
+           if not self.position:
+               if self.data.close[0] > self.sma[0]:
+                   self.buy()
+           else:
+               if self.data.close[0] < self.sma[0]:
+                   self.sell()
+   ```
+
+2. **Test via backtest**:
+   ```bash
+   python scripts/run_backtest.py \
+     --strategy strategies.my_strategy.MyStrategy \
+     --symbols SPY --start 2020-01-01 --end 2024-12-31
+   ```
+
+3. **Deploy to live trading**:
+   ```bash
+   ./scripts/start_live_trading.sh
+   ```
+
+### Risk Management Integration
+
+All strategies should inherit from [strategies/base_strategy.py](strategies/base_strategy.py:1) for automatic risk management:
+
+- **Position Limits**: `max_position_size` parameter
+- **Loss Limits**: `max_daily_loss`, `max_drawdown` parameters
+- **Concentration Limits**: `max_concentration` parameter
+- **Automatic Checks**: Pre-order risk validation
+- **Database Logging**: Automatic trade/position logging
+
+See [strategies/risk_manager.py](strategies/risk_manager.py:1) for full framework details.
+
+## Migration from LEAN
+
+This platform was migrated from QuantConnect LEAN to Backtrader in November 2025. Key changes:
+
+**Framework Changes**:
+- LEAN QCAlgorithm → Backtrader bt.Strategy
+- LEAN CLI → Python scripts + ib_insync
+- LEAN data → Direct IB data via ib_insync
+- LEAN live trading → Backtrader live trading with IB broker
+
+**Command Changes**:
+- `lean backtest` → `python scripts/run_backtest.py`
+- `lean live deploy` → `./scripts/start_live_trading.sh`
+- `lean data download` → `python scripts/download_data.py`
+
+**Benefits**:
+- ✅ Zero vendor lock-in (100% open-source)
+- ✅ Full control over execution and data
+- ✅ More flexible strategy development
+- ✅ Better integration with Python ecosystem
+- ✅ Lower costs (no QuantConnect subscription)
+
+See [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) for complete migration details and [docs/MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md) for LEAN→Backtrader conceptual mapping.
+
+## Troubleshooting
+
+### Common Issues
+
+**"ModuleNotFoundError: No module named 'backtrader'"**
+- Activate virtual environment: `source venv/bin/activate`
+- Reinstall: `pip install backtrader`
+
+**"Connection refused to IB Gateway"**
+- Check IB Gateway is running: `docker compose ps ib-gateway`
+- Check credentials in `.env` file
+- Verify port 4001 (paper) or 4002 (live) is accessible
+- Test connection: `python scripts/ib_connection.py`
+
+**"No data returned for symbol SPY"**
+- Verify IB Gateway connection
+- Check symbol is valid and market is open
+- Verify date range is valid (not future dates)
+- Check IB account has market data subscriptions
+
+**"Backtest script fails with import error"**
+- Ensure strategy file exists in `strategies/` directory
+- Check strategy class name matches import path
+- Verify all required indicators are imported
+
+### Debug Mode
+
+Enable debug logging in scripts:
+```bash
+# Set environment variable
+export DEBUG=1
+
+# Run with verbose output
+python scripts/run_backtest.py --strategy strategies.my_strategy.MyStrategy --symbols SPY --start 2020-01-01 --end 2024-12-31 --verbose
+```
+
+## Performance Best Practices
+
+1. **Use Daily Data**: Start with daily resolution, optimize to intraday only if needed
+2. **Limit Symbols**: Start with 1-5 symbols, expand gradually
+3. **Cache Results**: Backtest results are cached, reuse when possible
+4. **Parallel Execution**: Use `--parallel` flag for multi-symbol backtests (Epic 14)
+5. **Monitor Memory**: Large datasets can consume significant memory
+
+## Security Considerations
+
+- **Never commit credentials**: `.env` is gitignored, keep it that way
+- **Use paper trading first**: Validate all strategies in paper mode
+- **Review risk limits**: Set appropriate position/loss limits
+- **Monitor logs**: Regularly check logs for unusual activity
+- **Secure VNC**: Change default VNC password in production
+
+---
+
+**Quick Reference Card**:
+- Start services: `./scripts/start.sh`
+- Download data: `python scripts/download_data.py --symbols SPY --start 2020-01-01 --end 2024-12-31`
+- Run backtest: `python scripts/run_backtest.py --strategy strategies.sma_crossover.SMACrossover --symbols SPY --start 2020-01-01 --end 2024-12-31`
+- Live trading: `./scripts/start_live_trading.sh`
+- Emergency stop: `./scripts/emergency_stop.sh`
+- View dashboard: `http://localhost:8501`
