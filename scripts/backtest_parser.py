@@ -143,6 +143,11 @@ class BacktestParser:
             'Annual Standard Deviation': ('annual_std', self._parse_percentage),
             'Information Ratio': ('information_ratio', float),
             'Tracking Error': ('tracking_error', self._parse_percentage),
+
+            # Cost metrics
+            'Total Fees': ('total_fees', self._parse_currency),
+            'Average Slippage': ('average_slippage', self._parse_percentage),
+            'Total Slippage': ('total_slippage', self._parse_currency),
         }
 
         for line in stats_section.split('\n'):
@@ -333,6 +338,10 @@ class BacktestParser:
         value = value.strip().replace('%', '')
         return float(value) / 100.0 if '%' in value else float(value)
 
+    def _parse_currency(self, value: str) -> float:
+        """Parse currency string to float (e.g., '$123.45' -> 123.45)."""
+        return float(value.strip().replace('$', '').replace(',', ''))
+
     def _generate_default_metrics(self) -> Dict[str, Any]:
         """Generate default metrics structure."""
         return {
@@ -345,7 +354,10 @@ class BacktestParser:
             'trade_count': 0,
             'profit_factor': 0.0,
             'avg_win': 0.0,
-            'avg_loss': 0.0
+            'avg_loss': 0.0,
+            'total_fees': 0.0,
+            'average_slippage': 0.0,
+            'total_slippage': 0.0
         }
 
     def _fill_default_metrics(self, metrics: Dict) -> Dict[str, Any]:

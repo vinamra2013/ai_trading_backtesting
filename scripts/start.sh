@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 # Start the AI Trading Backtesting Platform
 # Usage: ./scripts/start.sh
 

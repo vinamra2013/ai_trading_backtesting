@@ -1,25 +1,22 @@
 services:
   # LEAN Trading Engine
   lean:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: quantconnect/lean:latest
     container_name: lean-engine
     volumes:
-      - ./algorithms:/app/algorithms
-      - ./config:/app/config
-      - ./data:/app/data
-      - ./results:/app/results
-      - ./logs:/app/logs
+      - .:/Lean
+      - ./config.json:/Lean/Launcher/config.json
+    working_dir: /Lean
     environment:
       - PYTHONUNBUFFERED=1
-      - LEAN_ENGINE_PATH=/app
+      - LEAN_ENGINE_PATH=/Lean
     networks:
       - trading-network
     depends_on:
       - ib-gateway
       - sqlite
     restart: unless-stopped
+    command: ["tail", "-f", "/dev/null"]
 
   # Interactive Brokers Gateway
   ib-gateway:
