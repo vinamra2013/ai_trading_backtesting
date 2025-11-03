@@ -170,7 +170,7 @@ Date,Open,High,Low,Close,Volume
 
 ---
 
-### [ ] US-11.5: Update Infrastructure Scripts
+### [✅] US-11.5: Update Infrastructure Scripts
 **As a developer, I need updated start/stop scripts for Backtrader**
 
 **Status:** ✅ Complete
@@ -178,13 +178,13 @@ Date,Open,High,Low,Close,Volume
 **Priority:** P1
 
 **Acceptance Criteria:**
-- [ ] Update `scripts/start.sh` for Backtrader services
-- [ ] Update `scripts/stop.sh` for graceful shutdown
-- [ ] Remove LEAN-specific commands
-- [ ] Add Backtrader service health checks
-- [ ] Update logging output and status messages
-- [ ] Test start/stop cycle multiple times
-- [ ] Documentation updated in README.md
+- [✅] Update `scripts/start.sh` for Backtrader services
+- [✅] Update `scripts/stop.sh` for graceful shutdown
+- [✅] Remove LEAN-specific commands
+- [✅] Add Backtrader service health checks
+- [✅] Update logging output and status messages
+- [✅] Test start/stop cycle multiple times
+- [✅] Documentation updated in README.md
 
 **Technical Notes:**
 ```bash
@@ -200,20 +200,20 @@ docker compose up -d backtrader ib-gateway sqlite monitoring
 
 ---
 
-### [ ] US-11.6: Environment Configuration
+### [✅] US-11.6: Environment Configuration
 **As a developer, I need environment variables for Backtrader**
 
-**Status:** 🔄 Pending
+**Status:** ✅ Complete
 **Estimate:** 2 hours
 **Priority:** P1
 
 **Acceptance Criteria:**
-- [ ] Update `.env.example` with Backtrader variables
-- [ ] Remove LEAN-specific environment variables
-- [ ] Add Backtrader configuration variables
-- [ ] Document all environment variables in README
-- [ ] Validate .env file parsing in scripts
-- [ ] Ensure .gitignore still excludes .env
+- [✅] Update `.env.example` with Backtrader variables
+- [✅] Remove LEAN-specific environment variables
+- [✅] Add Backtrader configuration variables
+- [✅] Document all environment variables in README
+- [✅] Validate .env file parsing in scripts
+- [✅] Ensure .gitignore still excludes .env
 
 **Technical Notes:**
 ```bash
@@ -235,20 +235,20 @@ BACKTRADER_RESULTS_DIR=/app/results
 
 ---
 
-### [ ] US-11.7: Data Directory Restructure
+### [✅] US-11.7: Data Directory Restructure
 **As a developer, I need updated data directory structure for Backtrader**
 
-**Status:** 🔄 Pending
+**Status:** ✅ Complete
 **Estimate:** 2 hours
 **Priority:** P2
 
 **Acceptance Criteria:**
-- [ ] Update data/ directory structure documentation
-- [ ] Create subdirectories: csv/, pickle/, cache/
-- [ ] Remove LEAN-specific directories if needed
-- [ ] Update .gitkeep files
-- [ ] Document data format conventions
-- [ ] Update scripts to use new paths
+- [✅] Update data/ directory structure documentation
+- [✅] Create subdirectories: csv/, pickle/, cache/
+- [✅] Remove LEAN-specific directories if needed
+- [✅] Update .gitkeep files
+- [✅] Document data format conventions
+- [✅] Update scripts to use new paths
 
 **Technical Notes:**
 ```
