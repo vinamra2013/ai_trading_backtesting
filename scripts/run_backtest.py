@@ -21,6 +21,7 @@ from scripts.backtrader_analyzers import (
     IBPerformanceAnalyzer, CommissionAnalyzer, EquityCurveAnalyzer,
     MonthlyReturnsAnalyzer, TradeLogAnalyzer
 )
+from scripts.backtest_parser import BacktraderResultParser
 
 
 class BacktestRunner:
@@ -51,8 +52,23 @@ class BacktestRunner:
         raise ImportError(f"No Strategy class found in {strategy_path}")
 
     def run(self, strategy_path: str, symbols: List[str], start_date: str,
-            end_date: str, strategy_params: Dict = None, resolution: str = 'Daily') -> Dict:
-        """Run backtest and return results"""
+            end_date: str, strategy_params: Dict = None, resolution: str = 'Daily',
+            export_csv: bool = False, export_text: bool = False) -> Dict:
+        """Run backtest and return results
+
+        Args:
+            strategy_path: Path to strategy file
+            symbols: List of symbols to trade
+            start_date: Start date YYYY-MM-DD
+            end_date: End date YYYY-MM-DD
+            strategy_params: Optional strategy parameters
+            resolution: Data resolution (Daily, Hour, Minute)
+            export_csv: Export trades to CSV
+            export_text: Export text summary report
+
+        Returns:
+            Backtest results dictionary
+        """
 
         print(f"\n{'='*80}\nBACKTRADER BACKTEST RUNNER\n{'='*80}")
 
@@ -134,6 +150,28 @@ class BacktestRunner:
         with open(output_file, 'w') as f:
             json.dump(backtest_results, f, indent=2)
 
+        # Optional exports using parser
+        if export_csv or export_text:
+            parser = BacktraderResultParser()
+
+            # Parse results for advanced exports
+            parsed_results = parser.parse_cerebro_results(
+                results, backtest_id, strategy_class.__name__, symbols,
+                start_date, end_date, engine.config.get('initial_capital', 100000)
+            )
+
+            if export_csv:
+                csv_file = self.results_dir / f"{backtest_id}_trades.csv"
+                parser.export_to_csv(parsed_results, str(csv_file))
+                print(f"   CSV export: {csv_file}")
+
+            if export_text:
+                text_file = self.results_dir / f"{backtest_id}_report.txt"
+                text_report = parser.generate_text_report(parsed_results)
+                with open(text_file, 'w') as f:
+                    f.write(text_report)
+                print(f"   Text report: {text_file}")
+
         print(f"\n{'='*80}\nBACKTEST COMPLETE\n{'='*80}")
         print(f"\n📈 Performance: ${backtest_results['performance']['initial_value']:,.2f} → ${backtest_results['performance']['final_value']:,.2f} ({backtest_results['performance']['total_return_pct']:.2f}%)")
         print(f"   Sharpe: {backtest_results['performance']['sharpe_ratio']:.2f} | Max DD: {backtest_results['performance']['max_drawdown_pct']:.2f}%")
@@ -152,6 +190,8 @@ def main():
     parser.add_argument('--resolution', default='Daily', help='Resolution')
     parser.add_argument('--params', type=json.loads, default={}, help='Strategy params as JSON')
     parser.add_argument('--config', default='/app/config/backtest_config.yaml', help='Config file')
+    parser.add_argument('--export-csv', action='store_true', help='Export trades to CSV')
+    parser.add_argument('--export-text', action='store_true', help='Export text summary report')
 
     args = parser.parse_args()
     runner = BacktestRunner(config_path=args.config)
@@ -159,10 +199,13 @@ def main():
     try:
         runner.run(strategy_path=args.strategy, symbols=args.symbols,
                   start_date=args.start, end_date=args.end,
-                  strategy_params=args.params, resolution=args.resolution)
+                  strategy_params=args.params, resolution=args.resolution,
+                  export_csv=args.export_csv, export_text=args.export_text)
         sys.exit(0)
     except Exception as e:
         print(f"❌ Error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
