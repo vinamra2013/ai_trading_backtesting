@@ -76,14 +76,14 @@ WORKDIR /app
 **Priority:** P0
 
 **Acceptance Criteria:**
-- [ ] Rewrite `scripts/ib_connection.py` using ib_insync library
-- [ ] Connection manager with retry logic (exponential backoff)
-- [ ] Support for paper (port 4001) and live (port 4002) trading
-- [ ] Health check method implemented
-- [ ] Context manager support for automatic cleanup
-- [ ] Error handling for connection failures
-- [ ] Logging integrated with existing log infrastructure
-- [ ] Unit tests for connection manager
+- [✅] Rewrite `scripts/ib_connection.py` using ib_insync library
+- [✅] Connection manager with retry logic (exponential backoff)
+- [✅] Support for paper (port 4001) and live (port 4002) trading
+- [✅] Health check method implemented
+- [✅] Context manager support for automatic cleanup
+- [✅] Error handling for connection failures
+- [✅] Logging integrated with existing log infrastructure
+- [✅] Unit tests for connection manager
 
 **Technical Notes:**
 ```python
@@ -114,23 +114,23 @@ class IBConnectionManager:
 
 ---
 
-### [ ] US-11.4: Basic Data Download Pipeline
+### [✅] US-11.4: Basic Data Download Pipeline
 **As a developer, I need to download historical data for Backtrader**
 
-**Status:** 🔄 Pending
+**Status:** ✅ Complete
 **Estimate:** 12 hours
 **Priority:** P0
 
 **Acceptance Criteria:**
-- [ ] Rewrite `scripts/download_data.py` using ib_insync
-- [ ] Support for multiple symbols (SPY, AAPL, etc.)
-- [ ] Date range specification (start/end dates)
-- [ ] Resolution support: Daily, Hourly, Minute
-- [ ] Data type support: Trades, Quotes, Bid/Ask
-- [ ] Save data in CSV format compatible with Backtrader
-- [ ] Error handling for IB rate limits
-- [ ] Progress logging and data validation
-- [ ] Documentation updated with new CLI usage
+- [✅] Rewrite `scripts/download_data.py` using ib_insync
+- [✅] Support for multiple symbols (SPY, AAPL, etc.)
+- [✅] Date range specification (start/end dates)
+- [✅] Resolution support: Daily, Hourly, Minute
+- [✅] Data type support: Trades, Quotes, Bid/Ask
+- [✅] Save data in CSV format compatible with Backtrader
+- [✅] Error handling for IB rate limits
+- [✅] Progress logging and data validation
+- [✅] Documentation updated with new CLI usage
 
 **Technical Notes:**
 ```python
@@ -173,7 +173,7 @@ Date,Open,High,Low,Close,Volume
 ### [ ] US-11.5: Update Infrastructure Scripts
 **As a developer, I need updated start/stop scripts for Backtrader**
 
-**Status:** 🔄 Pending
+**Status:** ✅ Complete
 **Estimate:** 6 hours
 **Priority:** P1
 
