@@ -1,143 +1,170 @@
 #!/usr/bin/env python3
 """
-Backtest Runner Script - Programmatic interface to LEAN backtesting.
+Backtrader Backtest Execution Script
+Epic 12: US-12.4 - Backtest Execution Script
 
-US-4.1: Easy Backtest Execution
-Track A: Enhanced with structured parsing
+Replaces LEAN backtest runner with Backtrader Cerebro execution
 """
 
 import argparse
-import json
-import logging
-import subprocess
 import sys
+import json
+import uuid
 from datetime import datetime
 from pathlib import Path
-import uuid
+from typing import Type, Dict, List
+import importlib.util
+import backtrader as bt
 
-# Import backtest parser
-from backtest_parser import parse_backtest
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+from scripts.cerebro_engine import CerebroEngine
+from scripts.backtrader_analyzers import (
+    IBPerformanceAnalyzer, CommissionAnalyzer, EquityCurveAnalyzer,
+    MonthlyReturnsAnalyzer, TradeLogAnalyzer
+)
 
 
 class BacktestRunner:
-    """Wrapper for LEAN backtest execution."""
+    """Backtest execution runner for Backtrader strategies"""
 
-    def run(self, algorithm: str, start: str, end: str, symbols: list[str], cost_model: str = "ib_standard"):
-        """
-        Run LEAN backtest with structured parsing for multiple symbols.
+    def __init__(self, config_path: str = '/app/config/backtest_config.yaml'):
+        self.config_path = config_path
+        self.results_dir = Path('/app/results/backtests')
+        self.results_dir.mkdir(parents=True, exist_ok=True)
 
-        Args:
-            algorithm: Path to algorithm directory
-            start: Start date YYYY-MM-DD
-            end: End date YYYY-MM-DD
-            symbols: List of symbols to backtest
-            cost_model: Cost model to use
+    def load_strategy_class(self, strategy_path: str) -> Type[bt.Strategy]:
+        """Dynamically load strategy class from file"""
+        strategy_file = Path(strategy_path)
+        if not strategy_file.exists():
+            strategy_file = Path('/app') / strategy_path
+            if not strategy_file.exists():
+                raise FileNotFoundError(f"Strategy file not found: {strategy_path}")
 
-        Returns:
-            A list of result dictionaries, one for each symbol.
-        """
-        results = []
-        for symbol in symbols:
-            logger.info(f"Running backtest for {algorithm} on {symbol}")
-            logger.info(f"Period: {start} to {end}")
+        spec = importlib.util.spec_from_file_location("strategy_module", strategy_file)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
 
-            # Build LEAN CLI command to be executed inside the container
-            log_file = f"/app/logs/backtest_{symbol}_{start}_{end}.log"
-            lean_cmd = [
-                "dotnet", "QuantConnect.Lean.Launcher.dll",
-                ">", log_file, "2>&1"
-            ]
+        for item_name in dir(module):
+            item = getattr(module, item_name)
+            if isinstance(item, type) and issubclass(item, bt.Strategy) and item != bt.Strategy:
+                return item
 
-            # Build the full command to be executed on the host
-            cmd = ["docker", "compose", "exec", "lean", "/bin/bash", "-c", ' '.join(lean_cmd)]
+        raise ImportError(f"No Strategy class found in {strategy_path}")
 
-            try:
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    def run(self, strategy_path: str, symbols: List[str], start_date: str,
+            end_date: str, strategy_params: Dict = None, resolution: str = 'Daily') -> Dict:
+        """Run backtest and return results"""
 
-                # Generate result ID
-                backtest_id = str(uuid.uuid4())
-                timestamp = datetime.now().isoformat()
+        print(f"\n{'='*80}\nBACKTRADER BACKTEST RUNNER\n{'='*80}")
 
-                # Parse backtest output into structured format
-                logger.info("Parsing backtest output...")
-                try:
-                    parsed_results = parse_backtest(
-                        result.stdout,
-                        backtest_id,
-                        algorithm,
-                        start,
-                        end
-                    )
-                    logger.info(f"✓ Parsed {parsed_results.get('trade_count', 0)} trades")
-                except Exception as e:
-                    logger.warning(f"Failed to parse backtest output: {e}")
-                    parsed_results = {
-                        "backtest_id": backtest_id,
-                        "algorithm": algorithm,
-                        "period": {"start": start, "end": end},
-                        "parse_error": str(e)
-                    }
+        backtest_id = str(uuid.uuid4())
+        strategy_class = self.load_strategy_class(strategy_path)
 
-                # Combine parsed results with metadata
-                result_data = {
-                    **parsed_results,
-                    "symbol": symbol,
-                    "cost_model": cost_model,
-                    "timestamp": timestamp,
-                    "raw_stdout": result.stdout,
-                    "status": "completed"
-                }
+        engine = CerebroEngine(self.config_path)
+        engine.add_strategy(strategy_class, **(strategy_params or {}))
 
-                # Save results
-                results_dir = Path("results/backtests")
-                results_dir.mkdir(parents=True, exist_ok=True)
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        engine.add_multiple_data(symbols=symbols, resolution=resolution,
+                                fromdate=start_dt, todate=end_dt)
 
-                result_file = results_dir / f"{backtest_id}.json"
-                result_file.write_text(json.dumps(result_data, indent=2))
+        engine.cerebro.addanalyzer(IBPerformanceAnalyzer, _name='ibperformance')
+        engine.cerebro.addanalyzer(CommissionAnalyzer, _name='commission')
+        engine.cerebro.addanalyzer(EquityCurveAnalyzer, _name='equity')
+        engine.cerebro.addanalyzer(MonthlyReturnsAnalyzer, _name='monthly')
+        engine.cerebro.addanalyzer(TradeLogAnalyzer, _name='tradelog')
 
-                logger.info(f"✓ Backtest completed: {backtest_id}")
-                logger.info(f"Results saved to: {result_file}")
+        results = engine.run()
+        strategy = results[0]
 
-                # Print summary
-                if "metrics" in result_data:
-                    metrics = result_data["metrics"]
-                    logger.info("=== Performance Summary ===")
-                    logger.info(f"Total Return: {metrics.get('total_return', 0)*100:.2f}%")
-                    logger.info(f"Sharpe Ratio: {metrics.get('sharpe_ratio', 0):.2f}")
-                    logger.info(f"Max Drawdown: {metrics.get('max_drawdown', 0)*100:.2f}%")
-                    logger.info(f"Win Rate: {metrics.get('win_rate', 0)*100:.2f}%")
-                    logger.info(f"Total Trades: {metrics.get('trade_count', 0)}")
-                
-                results.append(result_data)
+        ib_analysis = strategy.analyzers.ibperformance.get_analysis()
+        commission_analysis = strategy.analyzers.commission.get_analysis()
+        equity_analysis = strategy.analyzers.equity.get_analysis()
+        monthly_analysis = strategy.analyzers.monthly.get_analysis()
+        tradelog_analysis = strategy.analyzers.tradelog.get_analysis()
 
-            except subprocess.CalledProcessError as e:
-                logger.error(f"Backtest failed for {symbol}: {e}")
-                logger.error(e.stderr)
-                results.append(None)
-        return results
+        backtest_results = {
+            'backtest_id': backtest_id,
+            'timestamp': datetime.now().isoformat(),
+            'strategy': {
+                'name': strategy_class.__name__,
+                'path': strategy_path,
+                'parameters': strategy_params or {},
+            },
+            'configuration': {
+                'symbols': symbols,
+                'start_date': start_date,
+                'end_date': end_date,
+                'resolution': resolution,
+                'initial_capital': engine.config.get('initial_capital', 100000),
+                'commission_scheme': engine.config.get('broker', {}).get('commission_scheme', 'ib_standard'),
+            },
+            'performance': {
+                'initial_value': ib_analysis['initial_value'],
+                'final_value': ib_analysis['final_value'],
+                'total_return': ib_analysis['total_return'],
+                'total_return_pct': ib_analysis['total_return_pct'],
+                'sharpe_ratio': ib_analysis['sharpe_ratio'],
+                'max_drawdown': ib_analysis['max_drawdown'],
+                'max_drawdown_pct': ib_analysis['max_drawdown_pct'],
+            },
+            'trading': {
+                'total_trades': ib_analysis['total_trades'],
+                'winning_trades': ib_analysis['winning_trades'],
+                'losing_trades': ib_analysis['losing_trades'],
+                'win_rate': ib_analysis['win_rate'],
+                'avg_win': ib_analysis['avg_win'],
+                'avg_loss': ib_analysis['avg_loss'],
+                'profit_factor': ib_analysis['profit_factor'],
+            },
+            'costs': {
+                'total_commission': commission_analysis['total_commission'],
+                'avg_commission_per_trade': commission_analysis['avg_commission_per_trade'],
+                'total_pnl_gross': ib_analysis['total_pnl_gross'],
+                'total_pnl_net': ib_analysis['total_pnl'],
+            },
+            'equity_curve': [
+                {'datetime': e['datetime'].isoformat(), 'value': e['value']}
+                for e in equity_analysis['equity_curve']
+            ],
+            'monthly_returns': monthly_analysis['monthly_returns'],
+            'trades': tradelog_analysis['trades'],
+        }
+
+        output_file = self.results_dir / f"{backtest_id}.json"
+        with open(output_file, 'w') as f:
+            json.dump(backtest_results, f, indent=2)
+
+        print(f"\n{'='*80}\nBACKTEST COMPLETE\n{'='*80}")
+        print(f"\n📈 Performance: ${backtest_results['performance']['initial_value']:,.2f} → ${backtest_results['performance']['final_value']:,.2f} ({backtest_results['performance']['total_return_pct']:.2f}%)")
+        print(f"   Sharpe: {backtest_results['performance']['sharpe_ratio']:.2f} | Max DD: {backtest_results['performance']['max_drawdown_pct']:.2f}%")
+        print(f"\n📊 Trading: {backtest_results['trading']['total_trades']} trades | Win Rate: {backtest_results['trading']['win_rate']:.2f}%")
+        print(f"\n💾 Results: {output_file}\n{'='*80}\n")
+
+        return backtest_results
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run LEAN backtest")
-    parser.add_argument("--algorithm", required=True, help="Path to algorithm")
-    parser.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
-    parser.add_argument("--end", required=True, help="End date YYYY-MM-DD")
-    parser.add_argument("--symbols", nargs='+', required=True, help="List of symbols to backtest")
-    parser.add_argument("--cost-model", default="ib_standard", help="Cost model")
+    parser = argparse.ArgumentParser(description='Run Backtrader backtest')
+    parser.add_argument('--strategy', required=True, help='Strategy file path')
+    parser.add_argument('--symbols', nargs='+', required=True, help='Symbols')
+    parser.add_argument('--start', required=True, help='Start date (YYYY-MM-DD)')
+    parser.add_argument('--end', required=True, help='End date (YYYY-MM-DD)')
+    parser.add_argument('--resolution', default='Daily', help='Resolution')
+    parser.add_argument('--params', type=json.loads, default={}, help='Strategy params as JSON')
+    parser.add_argument('--config', default='/app/config/backtest_config.yaml', help='Config file')
+
     args = parser.parse_args()
+    runner = BacktestRunner(config_path=args.config)
 
-    runner = BacktestRunner()
-    results = runner.run(args.algorithm, args.start, args.end, args.symbols, args.cost_model)
-
-    # Exit with error if any of the backtests failed
-    if any(r is None for r in results):
-        sys.exit(1)
-    else:
+    try:
+        runner.run(strategy_path=args.strategy, symbols=args.symbols,
+                  start_date=args.start, end_date=args.end,
+                  strategy_params=args.params, resolution=args.resolution)
         sys.exit(0)
+    except Exception as e:
+        print(f"❌ Error: {type(e).__name__}: {e}")
+        sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

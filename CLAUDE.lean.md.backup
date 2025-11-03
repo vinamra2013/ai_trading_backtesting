@@ -4,12 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Algorithmic trading platform built on **Backtrader** (open-source) with Interactive Brokers integration. This is a Python-based backtesting and live trading system using Docker for containerized deployment.
+Algorithmic trading platform built on QuantConnect's LEAN engine with Interactive Brokers integration. This is a Python-based backtesting and live trading system using Docker for containerized deployment.
 
-**Migration Status**: ✅ Successfully migrated from LEAN to Backtrader (Nov 2025)
-**Architecture**: Backtrader-Native - All trading logic runs inside Backtrader strategies with IB integration via ib_insync.
-
-**See**: [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) for complete migration details.
+**Architecture**: LEAN-Native - All trading logic runs inside LEAN algorithms, with risk management as an integrated library. LEAN handles positions, orders, and execution natively.
 
 ## Environment Management
 
@@ -25,7 +22,7 @@ All Python commands (pip, lean, python scripts) MUST run within the virtual envi
 
 The platform uses a 4-service Docker architecture orchestrated via docker-compose.yml:
 
-1. **backtrader**: Backtrader trading engine (Python 3.12 + Backtrader 1.9.78.123)
+1. **lean**: LEAN trading engine (Python 3.12)
 2. **ib-gateway**: Interactive Brokers Gateway (headless) - handles broker connectivity
 3. **sqlite**: Trade history database
 4. **monitoring**: Streamlit dashboard on port 8501
@@ -42,11 +39,11 @@ All services communicate via `trading-network` bridge network.
 ./scripts/stop.sh
 
 # View logs (NEVER use -f flag as per project rules)
-docker compose logs backtrader
+docker compose logs lean
 docker compose logs ib-gateway
 
 # Restart specific service
-docker compose restart backtrader
+docker compose restart lean
 ```
 
 ## Interactive Brokers Integration
@@ -61,28 +58,25 @@ IB credentials are managed through `.env` file and Docker secrets:
 ### Connection Architecture
 
 `scripts/ib_connection.py` provides `IBConnectionManager` class with:
-- **ib_insync-based** connection manager (fully implemented)
 - Exponential backoff retry (3 attempts: 1s, 2s, 4s)
 - Health checks every 30 seconds
 - Context manager support for automatic connection lifecycle
 - Port 4001 for paper trading, 4002 for live (default: 4001)
 
-## Backtrader Engine Commands
+Note: Current implementation is a framework placeholder awaiting `ib_insync` integration when algorithms are deployed.
 
-All Backtrader commands run inside the Docker container:
+## LEAN Engine Commands
+
+All LEAN CLI commands require virtual environment activation:
 
 ```bash
-# Test IB connection
-docker exec backtrader-engine python /app/scripts/ib_connection.py
+source venv/bin/activate
 
-# Download historical data
-docker exec backtrader-engine python /app/scripts/download_data.py \
-  --symbols SPY AAPL --start 2024-01-01 --end 2024-12-31 --validate
+# Create new algorithm
+lean create-python-algorithm my_algorithm
 
 # Run backtest
-docker exec backtrader-engine python /app/scripts/run_backtest.py \
-  --strategy strategies/sma_crossover.py \
-  --symbols SPY --start 2024-01-01 --end 2024-12-31
+lean backtest algorithms/my_algorithm
 
 # Optimize parameters
 lean optimize algorithms/my_algorithm

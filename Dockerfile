@@ -1,4 +1,4 @@
-# LEAN Trading Engine Dockerfile
+# Backtrader Trading Engine Dockerfile
 FROM python:3.12-slim
 
 # Set working directory
@@ -8,44 +8,64 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     git \
     wget \
-    unzip \
+    gcc \
+    g++ \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Create virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install LEAN CLI and dependencies
+# Install Backtrader and core dependencies
 RUN pip install --upgrade pip && \
-    pip install lean
-
-# Install additional Python packages for trading
-RUN pip install \
+    pip install \
+    backtrader \
+    ib_insync \
     pandas \
     numpy \
     matplotlib \
     scikit-learn \
+    scikit-optimize \
     tables \
     h5py \
-    pytz
+    pytz \
+    pyyaml \
+    requests
+
+# Install additional packages for enhanced Backtrader functionality
+RUN pip install \
+    backtrader[plotting] \
+    plotly \
+    yfinance
 
 # Create required directories
 RUN mkdir -p /app/algorithms \
+    /app/strategies \
     /app/config \
-    /app/data \
-    /app/results \
-    /app/logs
+    /app/data/csv \
+    /app/data/processed \
+    /app/data/sqlite \
+    /app/data/cache \
+    /app/results/backtests \
+    /app/results/optimization \
+    /app/logs \
+    /app/scripts
 
 # Copy project files
-COPY algorithms/ /app/algorithms/
-COPY config/ /app/config/
+# Note: Ensure these directories exist before building (use ./scripts/start.sh)
+COPY algorithms /app/algorithms/
+COPY strategies /app/strategies/
+COPY config /app/config/
+COPY scripts /app/scripts/
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV LEAN_ENGINE_PATH=/app
+ENV BACKTRADER_ENGINE_PATH=/app
+ENV PYTHONPATH=/app:$PYTHONPATH
 
 # Expose ports (if needed for future monitoring)
-EXPOSE 8080
+EXPOSE 8220
 
-# Default command
-CMD ["lean", "live", "deploy"]
+# Default command (keep container running)
+CMD ["tail", "-f", "/dev/null"]

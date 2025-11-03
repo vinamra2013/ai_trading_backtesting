@@ -25,9 +25,10 @@ fi
 
 # Create necessary directories if they don't exist
 echo "📁 Creating directories..."
-mkdir -p data/{raw,processed,lean,sqlite} \
+mkdir -p data/{raw,processed,csv,sqlite,cache} \
          results/{backtests,optimization} \
-         logs
+         logs \
+         strategies
 
 # Build and start containers
 echo "🔨 Building Docker images..."

@@ -1,23 +1,15 @@
 services:
-  # Backtrader Trading Engine
-  backtrader:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: backtrader-engine
+  # LEAN Trading Engine
+  lean:
+    image: quantconnect/lean:latest
+    container_name: lean-engine
     volumes:
-      - ./algorithms:/app/algorithms
-      - ./strategies:/app/strategies
-      - ./config:/app/config
-      - ./data:/app/data
-      - ./results:/app/results
-      - ./logs:/app/logs
-      - ./scripts:/app/scripts
-    working_dir: /app
+      - .:/Lean
+      - ./config.json:/Lean/Launcher/config.json
+    working_dir: /Lean
     environment:
       - PYTHONUNBUFFERED=1
-      - BACKTRADER_ENGINE_PATH=/app
-      - PYTHONPATH=/app
+      - LEAN_ENGINE_PATH=/Lean
     networks:
       - trading-network
     depends_on:

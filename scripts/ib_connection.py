@@ -1,20 +1,23 @@
 """
-Interactive Brokers Connection Manager
-Epic 2: US-2.2 - IB Connection Management
+Interactive Brokers Connection Manager (Backtrader Migration)
+Epic 11: US-11.3 - IB Connection with ib_insync
 
 Features:
-- Automatic connection on startup
+- Automatic connection on startup using ib_insync
 - Reconnection logic with exponential backoff (3 retries)
 - Health checks every 30 seconds
 - Graceful disconnection on shutdown
 - Comprehensive error logging
+- AsyncIO event loop management
 """
 
 import os
 import time
 import logging
+import asyncio
 from typing import Optional
 from datetime import datetime
+from ib_insync import IB, util
 
 # Configure logging
 logging.basicConfig(
@@ -29,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class IBConnectionManager:
-    """Manages connection to Interactive Brokers Gateway/TWS"""
+    """Manages connection to Interactive Brokers Gateway/TWS using ib_insync"""
 
     def __init__(
         self,
@@ -38,7 +41,8 @@ class IBConnectionManager:
         client_id: int = 1,
         max_retries: int = 3,
         initial_backoff: float = 1.0,
-        health_check_interval: int = 30
+        health_check_interval: int = 30,
+        readonly: bool = False
     ):
         """
         Initialize IB Connection Manager
@@ -50,6 +54,7 @@ class IBConnectionManager:
             max_retries: Maximum reconnection attempts
             initial_backoff: Initial backoff time in seconds
             health_check_interval: Health check frequency in seconds
+            readonly: Read-only API access (default: False)
         """
         self.host = host
         self.port = port or int(os.getenv('IB_GATEWAY_PORT', '4001'))
@@ -57,15 +62,16 @@ class IBConnectionManager:
         self.max_retries = max_retries
         self.initial_backoff = initial_backoff
         self.health_check_interval = health_check_interval
+        self.readonly = readonly
 
-        self.connection = None
+        self.ib = IB()
         self.is_connected = False
         self.last_health_check = None
         self.retry_count = 0
 
         logger.info(
             f"IBConnectionManager initialized: {self.host}:{self.port} "
-            f"(client_id={self.client_id})"
+            f"(client_id={self.client_id}, readonly={self.readonly})"
         )
 
     def connect(self) -> bool:
@@ -85,55 +91,59 @@ class IBConnectionManager:
                     logger.info(f"Retry {attempt}/{self.max_retries} after {backoff_time}s")
                     time.sleep(backoff_time)
 
-                # Attempt connection
-                # NOTE: This is a placeholder. Actual implementation will use
-                # ib_insync or similar library once LEAN integration is complete
                 logger.info(f"Connection attempt {attempt + 1}/{self.max_retries}")
 
-                # TODO: Replace with actual IB connection logic
-                # from ib_insync import IB
-                # self.connection = IB()
-                # self.connection.connect(self.host, self.port, clientId=self.client_id)
+                # Connect using ib_insync
+                self.ib.connect(
+                    host=self.host,
+                    port=self.port,
+                    clientId=self.client_id,
+                    readonly=self.readonly,
+                    timeout=20
+                )
 
-                self.is_connected = True
-                self.retry_count = 0
-                self.last_health_check = datetime.now()
+                if self.ib.isConnected():
+                    self.is_connected = True
+                    self.retry_count = 0
+                    self.last_health_check = datetime.now()
 
-                logger.info("✅ Successfully connected to IB Gateway")
-                return True
+                    logger.info(
+                        f"✅ Successfully connected to IB Gateway "
+                        f"(serverVersion={self.ib.client.serverVersion()})"
+                    )
+                    return True
+                else:
+                    logger.warning(f"Connection attempt {attempt + 1} failed")
+                    self.retry_count = attempt + 1
+
+            except ConnectionRefusedError:
+                logger.error(
+                    f"Connection refused by IB Gateway at {self.host}:{self.port}. "
+                    f"Is IB Gateway running?"
+                )
+                self.retry_count = attempt + 1
 
             except Exception as e:
-                logger.error(f"Connection attempt {attempt + 1} failed: {e}")
-                self.retry_count += 1
+                logger.error(
+                    f"Connection error on attempt {attempt + 1}: {type(e).__name__}: {e}"
+                )
+                self.retry_count = attempt + 1
 
-                if attempt == self.max_retries - 1:
-                    logger.error(
-                        f"❌ Failed to connect after {self.max_retries} attempts"
-                    )
-                    return False
-
+        logger.error(
+            f"❌ Failed to connect after {self.max_retries} attempts"
+        )
+        self.is_connected = False
         return False
 
-    def disconnect(self) -> None:
+    def disconnect(self):
         """Gracefully disconnect from IB Gateway"""
-        if not self.is_connected:
-            logger.warning("Already disconnected")
-            return
-
-        try:
+        if self.is_connected and self.ib.isConnected():
             logger.info("Disconnecting from IB Gateway...")
-
-            # TODO: Replace with actual disconnection logic
-            # if self.connection:
-            #     self.connection.disconnect()
-
+            self.ib.disconnect()
             self.is_connected = False
-            self.connection = None
-
-            logger.info("✅ Gracefully disconnected from IB Gateway")
-
-        except Exception as e:
-            logger.error(f"Error during disconnection: {e}")
+            logger.info("✅ Disconnected successfully")
+        else:
+            logger.info("Already disconnected")
 
     def health_check(self) -> bool:
         """
@@ -143,62 +153,37 @@ class IBConnectionManager:
             bool: True if connection is healthy
         """
         try:
-            # Check if health check is needed
-            if self.last_health_check:
-                elapsed = (datetime.now() - self.last_health_check).total_seconds()
-                if elapsed < self.health_check_interval:
-                    return self.is_connected
+            if not self.is_connected or not self.ib.isConnected():
+                logger.warning("⚠️  Health check failed: Not connected")
+                return False
 
-            logger.debug("Performing health check...")
+            # Update last health check time
+            self.last_health_check = datetime.now()
 
-            # TODO: Replace with actual health check
-            # if self.connection and self.connection.isConnected():
-            #     self.last_health_check = datetime.now()
-            #     return True
-
-            # Placeholder: assume connected if is_connected flag is True
-            if self.is_connected:
-                self.last_health_check = datetime.now()
+            # Check if we can get account summary (simple API test)
+            accounts = self.ib.managedAccounts()
+            if accounts:
+                logger.debug(f"✅ Health check passed (accounts: {accounts})")
                 return True
-
-            # Connection lost - attempt reconnection
-            logger.warning("⚠️ Health check failed - connection lost")
-            return self.reconnect()
+            else:
+                logger.warning("⚠️  Health check failed: No accounts returned")
+                return False
 
         except Exception as e:
-            logger.error(f"Health check error: {e}")
+            logger.error(f"⚠️  Health check failed: {type(e).__name__}: {e}")
             return False
 
     def reconnect(self) -> bool:
         """
-        Attempt to reconnect to IB Gateway
+        Attempt to reconnect after connection loss
 
         Returns:
-            bool: True if reconnection successful
+            bool: True if reconnected successfully
         """
-        logger.warning("Attempting to reconnect...")
-        self.is_connected = False
+        logger.info("Attempting reconnection...")
+        self.disconnect()
+        time.sleep(2)  # Brief pause before reconnecting
         return self.connect()
-
-    def get_connection_status(self) -> dict:
-        """
-        Get detailed connection status
-
-        Returns:
-            dict: Connection status information
-        """
-        return {
-            'is_connected': self.is_connected,
-            'host': self.host,
-            'port': self.port,
-            'client_id': self.client_id,
-            'retry_count': self.retry_count,
-            'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
-            'uptime_seconds': (
-                (datetime.now() - self.last_health_check).total_seconds()
-                if self.last_health_check else 0
-            )
-        }
 
     def __enter__(self):
         """Context manager entry"""
@@ -209,32 +194,77 @@ class IBConnectionManager:
         """Context manager exit"""
         self.disconnect()
 
+    def get_connection_status(self) -> dict:
+        """
+        Get detailed connection status
 
-# Example usage
-if __name__ == "__main__":
-    # Create connection manager
-    manager = IBConnectionManager()
+        Returns:
+            dict: Connection status information
+        """
+        return {
+            'connected': self.is_connected and self.ib.isConnected(),
+            'host': self.host,
+            'port': self.port,
+            'client_id': self.client_id,
+            'readonly': self.readonly,
+            'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
+            'retry_count': self.retry_count,
+            'server_version': self.ib.client.serverVersion() if self.ib.isConnected() else None,
+            'connection_time': self.ib.client.connTime if self.ib.isConnected() else None
+        }
 
-    # Connect
-    if manager.connect():
-        print("Connected successfully!")
 
-        # Perform health checks
-        for i in range(3):
-            time.sleep(5)
-            status = manager.health_check()
-            print(f"Health check {i+1}: {'✅ Healthy' if status else '❌ Unhealthy'}")
+# Convenience function for simple connections
+def get_ib_connection(
+    host: str = 'ib-gateway',
+    port: int = None,
+    client_id: int = 1,
+    readonly: bool = False
+) -> IBConnectionManager:
+    """
+    Get a connected IB connection manager
 
-        # Get status
-        status = manager.get_connection_status()
-        print(f"Connection status: {status}")
+    Args:
+        host: IB Gateway hostname
+        port: IB Gateway port
+        client_id: Client identifier
+        readonly: Read-only API access
 
-        # Disconnect
-        manager.disconnect()
-    else:
-        print("Failed to connect")
+    Returns:
+        IBConnectionManager: Connected manager instance
 
-    # Or use as context manager
-    print("\nUsing context manager:")
-    with IBConnectionManager() as conn:
-        print(f"Is connected: {conn.is_connected}")
+    Raises:
+        ConnectionError: If connection fails
+    """
+    manager = IBConnectionManager(
+        host=host,
+        port=port,
+        client_id=client_id,
+        readonly=readonly
+    )
+
+    if not manager.connect():
+        raise ConnectionError(
+            f"Failed to connect to IB Gateway at {host}:{port or 4001}"
+        )
+
+    return manager
+
+
+if __name__ == '__main__':
+    """Test IB connection"""
+    print("Testing IB Connection Manager...")
+
+    try:
+        with IBConnectionManager() as ib_manager:
+            print(f"\nConnection Status:")
+            status = ib_manager.get_connection_status()
+            for key, value in status.items():
+                print(f"  {key}: {value}")
+
+            print(f"\nPerforming health check...")
+            healthy = ib_manager.health_check()
+            print(f"Health check result: {'✅ PASS' if healthy else '❌ FAIL'}")
+
+    except Exception as e:
+        print(f"❌ Error: {type(e).__name__}: {e}")
