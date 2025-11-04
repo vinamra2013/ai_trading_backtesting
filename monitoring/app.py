@@ -27,7 +27,8 @@ st.set_page_config(
 )
 
 # Auto-refresh every 5 seconds
-st_autorefresh = st.experimental_rerun
+# Note: st.experimental_rerun was removed in newer Streamlit versions
+# Using time.sleep for periodic refresh instead
 
 # Cache database connections and calculations
 @st.cache_resource

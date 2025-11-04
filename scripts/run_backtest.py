@@ -40,8 +40,11 @@ class BacktestRunner:
             if not strategy_file.exists():
                 raise FileNotFoundError(f"Strategy file not found: {strategy_path}")
 
-        spec = importlib.util.spec_from_file_location("strategy_module", strategy_file)
+        # Use unique module name based on file path to avoid conflicts
+        module_name = strategy_file.stem + "_strategy_module"
+        spec = importlib.util.spec_from_file_location(module_name, strategy_file)
         module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module  # Register module in sys.modules for Backtrader
         spec.loader.exec_module(module)
 
         for item_name in dir(module):

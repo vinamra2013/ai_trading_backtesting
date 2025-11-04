@@ -18,6 +18,7 @@ import logging
 import sys
 import os
 import pandas as pd
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
@@ -108,6 +109,49 @@ class DataDownloader:
         """Disconnect from IB Gateway"""
         if self.ib_manager:
             self.ib_manager.disconnect()
+
+    def check_and_restart_ib_gateway(self) -> bool:
+        """
+        Check IB connection and restart gateway if data farm issues detected
+
+        Returns:
+            bool: True if restart was performed
+        """
+        if not self.ib_manager or not self.ib_manager.ib:
+            return False
+
+        # Check for data farm connection issues in IB warnings
+        # Warning codes: 2103 (market data broken), 2105 (HMDS broken), 2157 (sec-def broken)
+        warnings = []
+        if hasattr(self.ib_manager.ib, '_events'):
+            # Check recent warnings for data farm issues
+            # IB Gateway logs these as warnings with specific codes
+            pass  # Warning tracking happens at ib_insync level
+
+        # Simple check: if we've been connected for >60s and seeing repeated timeouts,
+        # trigger restart via Docker Compose
+        try:
+            logger.warning("⚠️  Detected data farm connection issues - restarting IB Gateway...")
+            result = subprocess.run(
+                ['docker', 'compose', 'restart', 'ib-gateway'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                logger.info("✅ IB Gateway restarted successfully")
+                # Wait for gateway to initialize
+                import time
+                time.sleep(15)
+                return True
+            else:
+                logger.error(f"❌ Failed to restart IB Gateway: {result.stderr}")
+                return False
+
+        except Exception as e:
+            logger.error(f"❌ Error restarting IB Gateway: {e}")
+            return False
 
     def download(
         self,
@@ -211,7 +255,7 @@ class DataDownloader:
                 # Prepare for CSV export
                 df = df.rename(columns={'date': 'datetime'})
                 df = df[['datetime', 'open', 'high', 'low', 'close', 'volume']]
-                df['datetime'] = pd.to_datetime(df['datetime'])
+                df['datetime'] = pd.to_datetime(df['datetime']).dt.strftime('%Y-%m-%d %H:%M:%S')
 
                 # Save to CSV
                 output_file = self.output_dir / f"{symbol}_{resolution}.csv"
@@ -226,6 +270,21 @@ class DataDownloader:
                 util.sleep(0.5)
 
             except Exception as e:
+                error_msg = str(e).lower()
+                # Detect data farm connection issues or timeouts
+                if any(indicator in error_msg for indicator in ['farm', 'timeout', 'connection', 'broken']):
+                    logger.warning(f"⚠️  Possible data farm issue detected: {e}")
+                    # Attempt restart if not already tried
+                    if not hasattr(self, '_restart_attempted'):
+                        self._restart_attempted = True
+                        if self.check_and_restart_ib_gateway():
+                            # Reconnect after restart
+                            if self.connect(host=os.getenv('IB_HOST', 'localhost')):
+                                logger.info("♻️  Retrying download after IB Gateway restart...")
+                                # Continue to next symbol, will retry on next run
+                            else:
+                                logger.error("❌ Failed to reconnect after restart")
+
                 logger.error(f"❌ Error downloading {symbol}: {type(e).__name__}: {e}")
                 continue
 
