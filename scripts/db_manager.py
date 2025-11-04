@@ -42,20 +42,25 @@ class DBManager:
     - Transaction support via context managers
     """
 
-    def __init__(self, db_path: str = "data/sqlite/trading.db"):
+    def __init__(self, db_path: str = "data/sqlite/trading.db", read_only: bool = False):
         """
         Initialize database manager.
 
         Args:
             db_path: Path to SQLite database file
+            read_only: If True, skip WAL mode and schema creation (for monitoring)
         """
         self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.read_only = read_only
 
-        logger.info(f"DBManager initialized with database: {self.db_path}")
+        if not read_only:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Set WAL mode for concurrent access
-        self._enable_wal_mode()
+        logger.info(f"DBManager initialized with database: {self.db_path} (read_only={read_only})")
+
+        # Set WAL mode for concurrent access (skip for read-only)
+        if not read_only:
+            self._enable_wal_mode()
 
     def _enable_wal_mode(self) -> None:
         """Enable Write-Ahead Logging for better concurrency."""
@@ -82,13 +87,21 @@ class DBManager:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM orders")
         """
-        conn = sqlite3.connect(self.db_path)
+        # Use URI mode for read-only connections
+        if self.read_only:
+            uri = f"file:{self.db_path}?mode=ro"
+            conn = sqlite3.connect(uri, uri=True)
+        else:
+            conn = sqlite3.connect(self.db_path)
+
         conn.row_factory = sqlite3.Row
         try:
             yield conn
-            conn.commit()
+            if not self.read_only:
+                conn.commit()
         except Exception:
-            conn.rollback()
+            if not self.read_only:
+                conn.rollback()
             raise
         finally:
             conn.close()

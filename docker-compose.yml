@@ -75,6 +75,7 @@ services:
     container_name: monitoring-dashboard
     volumes:
       - ./monitoring:/app/monitoring
+      - ./scripts:/app/scripts:ro
       - ./data:/app/data:ro
       - ./results:/app/results:ro
       - ./logs:/app/logs:ro

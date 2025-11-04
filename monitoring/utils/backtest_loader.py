@@ -103,7 +103,7 @@ class BacktestLoader:
         statistics = data.get('Statistics', {})
         runtime_statistics = data.get('RuntimeStatistics', {})
 
-        # Extract key metrics (adapt based on actual LEAN output structure)
+        # Extract key metrics (adapt based on actual Backtrader output structure)
         sharpe = self._safe_float(statistics.get('Sharpe Ratio', metrics.get('sharpe_ratio', 0)))
         total_return = self._safe_float(statistics.get('Total Net Profit', metrics.get('total_return', 0)))
         max_drawdown = self._safe_float(statistics.get('Drawdown', metrics.get('max_drawdown', 0)))

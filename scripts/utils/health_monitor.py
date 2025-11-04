@@ -107,7 +107,7 @@ class HealthMonitor:
         """Get database manager instance with error handling."""
         if self.db_manager is None:
             try:
-                self.db_manager = DBManager(self.db_path)
+                self.db_manager = DBManager(self.db_path, read_only=True)
             except Exception as e:
                 logger.error(f"Failed to initialize DBManager: {e}")
                 return None

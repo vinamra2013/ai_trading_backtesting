@@ -56,8 +56,9 @@ class PerformanceMonitor:
             # Try to find the project root and set correct database path
             script_dir = Path(__file__).parent.parent.parent  # Go up to project root
             db_path = str(script_dir / "data" / "sqlite" / "trades.db")
-        
-        self.db_manager = DBManager(db_path)
+
+        # Use read_only=True for monitoring dashboard
+        self.db_manager = DBManager(db_path, read_only=True)
         self.is_monitoring = False
         self.monitoring_thread = None
         self.monitoring_interval = 30  # seconds

@@ -4,19 +4,22 @@ Epic 7: Monitoring & Observability
 Enhanced Real-time Dashboard with P&L calculations and system health
 """
 
+import os
+import sys
+from pathlib import Path
+
+# CRITICAL: Add paths BEFORE any other imports that might need them
+sys.path.insert(0, '/app')
+sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
+sys.path.insert(0, str(Path(__file__).parent / 'utils'))
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
-import os
-import sys
 import time
-from pathlib import Path
-
-# Add scripts directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent / 'scripts'))
-sys.path.append(str(Path(__file__).parent / 'utils'))
 
 # Page configuration
 st.set_page_config(
@@ -33,14 +36,15 @@ st.set_page_config(
 # Cache database connections and calculations
 @st.cache_resource
 def get_db_manager():
-    """Get database manager instance."""
+    """Get database manager instance in read-only mode."""
     try:
         from scripts.db_manager import DBManager
         # Use relative path from project root
         import os
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         db_path = os.path.join(project_root, 'data', 'sqlite', 'trades.db')
-        return DBManager(db_path)
+        # Use read_only=True for monitoring dashboard
+        return DBManager(db_path, read_only=True)
     except Exception as e:
         st.error(f"Database connection failed: {e}")
         return None
@@ -241,9 +245,9 @@ with st.sidebar:
     
     # Check IB Gateway (mock check)
     st.metric("IB Gateway", "Connected ✅")
-    
-    # Check LEAN engine (mock check)
-    st.metric("LEAN Engine", "Running ✅")
+
+    # Check Backtrader engine (mock check)
+    st.metric("Backtrader Engine", "Running ✅")
     
     # Last update time
     st.metric("Last Update", datetime.now().strftime('%H:%M:%S'))
@@ -1202,7 +1206,8 @@ with tab8:
     st.subheader("Environment Variables")
     env_vars = {
         'IB_TRADING_MODE': os.getenv('IB_TRADING_MODE', 'not set'),
-        'LEAN_ENGINE_PATH': os.getenv('LEAN_ENGINE_PATH', 'not set'),
+        'IB_GATEWAY_HOST': os.getenv('IB_GATEWAY_HOST', 'ib-gateway'),
+        'IB_GATEWAY_PORT': os.getenv('IB_GATEWAY_PORT', '4001'),
         'LOG_LEVEL': os.getenv('LOG_LEVEL', 'not set'),
         'DATABASE_PATH': '/app/data/sqlite/trades.db'
     }
