@@ -77,3 +77,4 @@ Thumbs.db
 venv/
 # Secrets directory
 secrets/
+config/config.ini
