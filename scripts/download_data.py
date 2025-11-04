@@ -182,7 +182,7 @@ class DataDownloader:
                 # Download historical bars
                 bars = self.ib_manager.ib.reqHistoricalData(
                     contract,
-                    endDateTime=end_dt,
+                    endDateTime=end_dt.date(),  # Convert datetime to date for IB API
                     durationStr=duration,
                     barSizeSetting=bar_size,
                     whatToShow=what_to_show,
@@ -201,8 +201,8 @@ class DataDownloader:
                     logger.warning(f"⚠️  Empty DataFrame for {symbol}")
                     continue
 
-                # Filter by date range
-                df = df[(df['date'] >= start_dt) & (df['date'] <= end_dt)]
+                # Filter by date range (convert datetime to date for comparison)
+                df = df[(df['date'] >= start_dt.date()) & (df['date'] <= end_dt.date())]
 
                 if df.empty:
                     logger.warning(f"⚠️  No data in date range for {symbol}")

@@ -51,7 +51,8 @@ class IBConnectionManager:
 
         Args:
             host: IB Gateway hostname (default: 'ib-gateway' for Docker)
-            port: IB Gateway port (4001 for paper, 4002 for live)
+            port: IB Gateway port (8888 for extrange/ibkr-docker - unified port)
+                  Note: Port 8888 works for both paper and live trading (extrange image)
             client_id: Unique client identifier
             max_retries: Maximum reconnection attempts
             initial_backoff: Initial backoff time in seconds
@@ -59,7 +60,7 @@ class IBConnectionManager:
             readonly: Read-only API access (default: False)
         """
         self.host = host
-        self.port = port or int(os.getenv('IB_GATEWAY_PORT', '4001'))
+        self.port = port or int(os.getenv('IB_GATEWAY_PORT', '8888'))
         self.client_id = client_id
         self.max_retries = max_retries
         self.initial_backoff = initial_backoff

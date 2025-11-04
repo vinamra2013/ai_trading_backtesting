@@ -26,29 +26,33 @@ services:
     restart: unless-stopped
     command: ["tail", "-f", "/dev/null"]
 
-  # Interactive Brokers Gateway
+  # Interactive Brokers Gateway (extrange/ibkr-docker)
   ib-gateway:
-    image: gnzsnz/ib-gateway:latest
+    image: ghcr.io/extrange/ibkr:stable
     container_name: ib-gateway
+    ulimits:
+      nofile: 10000  # Prevent FD table errors
     env_file:
       - .env
     environment:
-      - TWS_USERID=${IB_USERNAME}
-      - TWS_PASSWORD_FILE=/run/secrets/ib_password
-      - TRADING_MODE=${IB_TRADING_MODE:-paper}
-      - READ_ONLY_API=no
-      - VNC_SERVER_PASSWORD=${VNC_PASSWORD:-password}
-    secrets:
-      - ib_password
+      - USERNAME=${IB_USERNAME}
+      - PASSWORD=${IB_PASSWORD}
+      - GATEWAY_OR_TWS=gateway
+      - TWOFA_TIMEOUT_ACTION=restart
+      - IBC_TradingMode=${IB_TRADING_MODE:-paper}
+      - IBC_ReadOnlyApi=no
+      - ReadOnlyApi=no
+      - IBC_AcceptNonBrokerageAccountWarning=yes
+      - IBC_AcceptIncomingConnectionAction=accept
+      - IBC_TrustedTwsApiClientIPs=172.25.0.0/16
     ports:
-      - "4001:4001"  # IB Gateway API port (paper trading)
-      - "4002:4002"  # IB Gateway API port (live trading)
-      - "5900:5900"  # VNC port for remote desktop
+      - "6080:6080"  # noVNC browser access
+      - "8888:8888"  # API access (unified port for paper/live) - accessible from Docker network
     networks:
       - trading-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "4001"]
+      test: ["CMD", "nc", "-z", "localhost", "8888"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -92,7 +96,3 @@ networks:
 volumes:
   sqlite-data:
     driver: local
-
-secrets:
-  ib_password:
-    file: ./secrets/ib_password.txt
