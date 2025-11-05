@@ -1,0 +1,35 @@
+# MLflow Tracking Server Dockerfile - Epic 17: AI-Native Research Lab
+# Includes PostgreSQL dependencies for MLflow backend storage
+
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /mlflow
+
+# Install system dependencies including PostgreSQL client
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    postgresql-client \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install MLflow and required dependencies
+RUN pip install --no-cache-dir \
+    mlflow==3.5.1 \
+    psycopg2-binary \
+    alembic \
+    gunicorn
+
+# Create artifacts directory
+RUN mkdir -p /mlflow/artifacts /mlflow/backend
+
+# Expose MLflow port
+EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:5000/health || exit 1
+
+# Default command
+CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]

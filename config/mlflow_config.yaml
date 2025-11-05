@@ -1,0 +1,204 @@
+# MLflow Configuration - Epic 17: AI-Native Research Lab
+# Configuration for MLflow experiment tracking and optimization
+
+# MLflow server settings
+mlflow:
+  tracking_uri: "http://mlflow:5000"
+  experiment:
+    # Default experiment configuration
+    default_experiment: "Default"
+    # Artifact storage configuration
+    artifact_location: "/mlflow/artifacts"
+    # Backend store URI (PostgreSQL)
+    backend_store_uri: "postgresql://mlflow:mlflow_secure_password@postgres:5432/mlflow"
+
+# Project hierarchy configuration
+project:
+  # Naming convention: {Project}.{AssetClass}.{StrategyFamily}.{Strategy}
+  # Example: Q1_2025.Equities.MeanReversion.SMACrossover
+  
+  # Layer 1: Project naming
+  layers:
+    project: "{project}"          # Q1_2025, Q2_2025, etc.
+    asset_class: "{asset_class}"  # Equities, Crypto, Forex, etc.
+    strategy_family: "{family}"   # MeanReversion, Momentum, ML, etc.
+    strategy: "{strategy}"        # SMACrossover, RSIStrategy, etc.
+  
+  # Default values if not provided
+  defaults:
+    project: "Default"
+    asset_class: "Equities" 
+    strategy_family: "Unknown"
+    strategy: "Unknown"
+
+# Logging configuration
+logging:
+  # Performance settings
+  performance:
+    # Maximum logging overhead target (ms)
+    max_overhead_ms: 200
+    # Async logging (future feature)
+    async_logging: false
+  
+  # Artifact management
+  artifacts:
+    # Enable artifact logging
+    enabled: true
+    # Artifacts to log
+    include:
+      - equity_curve
+      - trade_log
+      - strategy_plots
+      - backtest_summary
+    # Artifact formats
+    formats:
+      equity_curve: "csv"
+      trade_log: "csv"
+      strategy_plots: "png"
+      summary: "json"
+
+# Optimization settings (for future Optuna integration)
+optimization:
+  # Study configuration
+  study:
+    # Default objective metric
+    default_objective: "sharpe_ratio"
+    # Objective direction (maximize or minimize)
+    objective_direction: "maximize"
+    
+  # Parameter constraints
+  constraints:
+    # Maximum parameter name length
+    max_param_name_length: 50
+    # Maximum parameter value complexity
+    max_param_complexity: "simple"  # simple, moderate, complex
+
+# Experiment management
+experiments:
+  # Auto-create experiments
+  auto_create: true
+  # Experiment lifecycle
+  lifecycle:
+    # Default status tag
+    default_status: "research"  # research, testing, production, archived
+    # Auto-archive after days
+    auto_archive_days: 365
+  
+  # Tag management
+  tags:
+    # Required tags
+    required:
+      - project
+      - asset_class
+      - strategy_family
+      - strategy
+      - team
+      - status
+    # Optional tags
+    optional:
+      - description
+      - market_regime
+      - benchmark
+      - time_period
+      - notes
+
+# Integration settings
+integration:
+  # Backtrader analyzer integration
+  analyzers:
+    # Map analyzer outputs to MLflow metrics
+    metric_mapping:
+      # IBPerformanceAnalyzer metrics
+      ib_performance:
+        total_return: "total_return"
+        sharpe_ratio: "sharpe_ratio"
+        max_drawdown: "max_drawdown"
+        win_rate: "win_rate"
+        profit_factor: "profit_factor"
+        total_trades: "total_trades"
+        avg_win: "avg_win"
+        avg_loss: "avg_loss"
+      
+      # CommissionAnalyzer metrics
+      commission:
+        total_commission: "total_commission"
+        commission_per_trade: "commission_per_trade"
+        commission_rate: "commission_rate"
+      
+      # MonthlyReturnsAnalyzer metrics
+      monthly_returns:
+        best_month: "best_month_return"
+        worst_month: "worst_month_return"
+        monthly_volatility: "monthly_volatility"
+        
+  # Data feed integration
+  data_feeds:
+    # Symbol tracking
+    track_symbols: true
+    # Market data source
+    data_source: "InteractiveBrokers"
+    
+# Performance monitoring
+monitoring:
+  # Health checks
+  health_check:
+    # Interval between checks (seconds)
+    interval: 60
+    # Timeout for operations (seconds)
+    timeout: 30
+  
+  # Metrics collection
+  metrics:
+    # Track logging performance
+    performance_tracking: true
+    # Alert thresholds
+    alerts:
+      # Alert if logging overhead > target
+      logging_overhead_ms: 250
+      # Alert if experiment creation fails
+      experiment_creation_failure: true
+      # Alert if metric logging fails
+      metric_logging_failure: true
+
+# Development settings
+development:
+  # Debug mode
+  debug: false
+  # Verbose logging
+  verbose_logging: false
+  # Test mode (doesn't actually log)
+  test_mode: false
+  # Mock MLflow for testing
+  mock_mlflow: false
+
+# Documentation and examples
+examples:
+  # Sample experiment names
+  sample_experiments:
+    - "Q1_2025.Equities.MeanReversion.SMACrossover"
+    - "Q1_2025.Equities.Momentum.RSIStrategy"
+    - "Q1_2025.Crypto.MeanReversion.ARBITRAGE"
+  
+  # Sample tags
+  sample_tags:
+    research:
+      project: "Q1_2025"
+      asset_class: "Equities"
+      strategy_family: "MeanReversion"
+      strategy: "SMACrossover"
+      team: "quant_research"
+      status: "research"
+      description: "Testing simple moving average crossover on SPY"
+      benchmark: "SPY"
+      time_period: "2020-2024"
+    
+    production:
+      project: "Q1_2025"
+      asset_class: "Equities" 
+      strategy_family: "ML"
+      strategy: "RandomForest"
+      team: "quant_production"
+      status: "production"
+      description: "Production ML strategy with risk management"
+      benchmark: "SPY"
+      time_period: "2024-2025"

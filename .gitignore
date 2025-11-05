@@ -30,10 +30,15 @@ data/raw/**
 data/processed/**
 data/lean/**
 data/sqlite/**
+data/postgres/**
 *.hdf5
 *.h5
 *.csv
 *.parquet
+
+# MLflow (artifacts and backend database)
+mlflow/artifacts/**
+mlflow/backend/**
 
 # Results (generated files)
 results/**
@@ -78,3 +83,9 @@ venv/
 # Secrets directory
 secrets/
 config/config.ini
+
+# Data directories (MLflow databases and artifacts)
+data/**
+mlflow/artifacts/**
+mlflow/backend/**
+mlflow/mlflow.db

@@ -39,6 +39,17 @@ RUN pip install \
     plotly \
     yfinance
 
+# Install Epic 17: AI-Native Research Lab dependencies
+RUN pip install \
+    mlflow \
+    psycopg2-binary \
+    quantstats \
+    ipython \
+    scipy \
+    kaleido \
+    optuna \
+    sqlalchemy
+
 # Create required directories
 RUN mkdir -p /app/algorithms \
     /app/strategies \

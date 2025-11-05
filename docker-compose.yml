@@ -18,11 +18,14 @@ services:
       - PYTHONUNBUFFERED=1
       - BACKTRADER_ENGINE_PATH=/app
       - PYTHONPATH=/app
+       - MLFLOW_TRACKING_URI=http://172.25.0.5:5000
     networks:
       - trading-network
     depends_on:
       - ib-gateway
       - sqlite
+      - mlflow
+      - postgres
     restart: unless-stopped
     command: ["tail", "-f", "/dev/null"]
 
@@ -90,10 +93,65 @@ services:
       - sqlite
     restart: unless-stopped
 
+  # PostgreSQL Database (MLflow Backend + Optuna Storage)
+  postgres:
+    image: postgres:16-alpine
+    container_name: mlflow-postgres
+    environment:
+      POSTGRES_DB: mlflow
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow_secure_password
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - trading-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MLflow Tracking Server (Experiment Tracking & Artifact Storage)
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    container_name: mlflow-tracking
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow/artifacts:/mlflow/artifacts
+      - ./mlflow/backend:/mlflow/backend
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:mlflow_secure_password@postgres:5432/mlflow
+      - MLFLOW_ARTIFACTS_DESTINATION=/mlflow/artifacts
+      - MLFLOW_SERVER_HOST=0.0.0.0
+      - MLFLOW_SERVER_PORT=5000
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://mlflow:mlflow_secure_password@postgres:5432/mlflow
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    networks:
+      - trading-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 networks:
   trading-network:
     driver: bridge
 
 volumes:
   sqlite-data:
+    driver: local
+  postgres-data:
     driver: local

@@ -82,9 +82,63 @@ python scripts/download_data.py \
 
 # Run backtest
 source venv/bin/activate
+ python scripts/run_backtest.py \
+   --strategy strategies.sma_crossover.SMACrossover \
+   --symbols SPY --start 2024-01-01 --end 2024-12-31
+```
+
+### MLflow Experiment Tracking (Epic 17)
+
+**Status**: ✅ Implemented - AI-Native Research Lab with centralized experiment tracking.
+
+#### Enable MLflow Logging
+
+```bash
+source venv/bin/activate
 python scripts/run_backtest.py \
   --strategy strategies.sma_crossover.SMACrossover \
-  --symbols SPY --start 2024-01-01 --end 2024-12-31
+  --symbols SPY --start 2020-01-01 --end 2024-12-31 \
+  --mlflow \
+  --project Q1_2025 \
+  --asset-class Equities \
+  --strategy-family MeanReversion
+```
+
+#### MLflow Features
+
+- **Centralized Tracking**: All backtests logged to PostgreSQL-backed MLflow server
+- **Project Hierarchy**: Dot notation organization (Project.AssetClass.StrategyFamily.Strategy)
+- **Advanced Metrics**: 30+ metrics including Sortino, Calmar, regime analysis, alpha/beta
+- **Artifact Storage**: Equity curves, trade logs, strategy plots, tearsheets
+- **Experiment Comparison**: Compare strategies across projects and time periods
+
+#### Access MLflow UI
+
+```bash
+# Start services (includes MLflow on port 5000)
+./scripts/start.sh
+
+# Open MLflow UI
+open http://localhost:5000
+```
+
+#### Experiment Organization
+
+**Naming Convention**: `{Project}.{AssetClass}.{StrategyFamily}.{Strategy}`
+- `Q1_2025.Equities.MeanReversion.SMACrossover`
+- `Q2_2025.Crypto.Momentum.RSIStrategy`
+
+**Tags**: Comprehensive tagging for filtering and organization
+- Project, Asset Class, Strategy Family, Team, Status
+- Symbols, Time Period, Benchmark
+
+#### Advanced Metrics (Epic 17)
+
+Backtests now include:
+- **QuantStats**: 30+ advanced metrics (Sortino, Calmar, Omega, VaR, CVaR)
+- **Regime Analysis**: Bull/bear market performance breakdown
+- **Alpha/Beta**: Benchmark comparison vs SPY
+- **HTML Tearsheets**: Comprehensive performance reports
 
 # Optimize parameters (Epic 14 - pending)
 python scripts/optimize_strategy.py \

@@ -1,0 +1,156 @@
+# Metrics Configuration - Epic 17: AI-Native Research Lab
+# Configuration for advanced metrics calculation and analysis
+
+# QuantStats Configuration
+quantstats:
+  # Benchmark settings
+  benchmark:
+    default: "SPY"
+    available: ["SPY", "QQQ", "IWM", "VTI"]
+    risk_free_rate: 0.02  # 2% annual risk-free rate
+
+  # Metrics to calculate
+  enabled_metrics:
+    # Performance metrics
+    performance:
+      - total_return
+      - annual_return
+      - sharpe_ratio
+      - sortino_ratio
+      - calmar_ratio
+
+    # Risk metrics
+    risk:
+      - max_drawdown
+      - var_95
+      - cvar_95
+      - tail_ratio
+      - omega_ratio
+      - annual_volatility
+
+    # Return metrics
+    returns:
+      - best_day
+      - worst_day
+      - best_month
+      - worst_month
+      - win_rate
+      - profit_factor
+      - avg_win
+      - avg_loss
+
+    # Distribution metrics
+    distribution:
+      - skewness
+      - kurtosis
+      - jarque_bera_stat
+      - jarque_bera_pvalue
+      - avg_rolling_volatility
+
+  # Tearsheet generation
+  tearsheet:
+    enabled: true
+    output_dir: "results/tearsheets"
+    format: "html"
+    include_plots: true
+
+# Regime Analysis Configuration
+regime_analysis:
+  # Moving average periods for regime detection
+  sma_period: 200
+  volatility_window: 30
+
+  # Regime definitions
+  regimes:
+    bull_high_vol: "Price > 200 SMA AND Volatility > Median"
+    bull_low_vol: "Price > 200 SMA AND Volatility <= Median"
+    bear_high_vol: "Price <= 200 SMA AND Volatility > Median"
+    bear_low_vol: "Price <= 200 SMA AND Volatility <= Median"
+
+  # Metrics calculated per regime
+  regime_metrics:
+    - count
+    - return
+    - annual_return
+    - volatility
+    - sharpe
+    - max_drawdown
+    - win_rate
+
+# Alpha/Beta Analysis Configuration
+alpha_beta:
+  # Risk-free rate for alpha calculation
+  risk_free_rate: 0.02
+
+  # Benchmark data source
+  benchmark_source: "yfinance"  # Options: yfinance, local, api
+
+  # Calculation settings
+  calculations:
+    # Rolling window for beta stability (days)
+    rolling_window_days: 252
+    # Minimum data points required
+    min_data_points: 30
+    # Confidence level for VaR calculations
+    var_confidence: 0.95
+
+  # Metrics to calculate
+  enabled_metrics:
+    - alpha
+    - beta
+    - r_squared
+    - information_ratio
+    - tracking_error
+    - correlation
+    - excess_return
+
+# Performance Charts Configuration
+charts:
+  # Chart generation settings
+  enabled: true
+  output_dir: "results/charts"
+  format: "html"  # html, png, svg
+
+  # Chart types to generate
+  types:
+    - equity_curve
+    - drawdown
+    - monthly_heatmap
+    - rolling_sharpe
+    - underwater_plot
+
+  # Plotly settings
+  plotly:
+    theme: "plotly_white"
+    width: 1000
+    height: 600
+
+# Integration Settings
+integration:
+  # MLflow logging of metrics
+  mlflow_logging:
+    enabled: true
+    log_all_metrics: true  # Log all calculated metrics to MLflow
+    metric_prefix: ""  # Prefix for metric names in MLflow
+
+  # JSON output inclusion
+  json_output:
+    include_quantstats: true
+    include_regime_analysis: true
+    include_alpha_beta: true
+    include_charts: false  # Charts are file artifacts
+
+  # Performance thresholds
+  thresholds:
+    # Alert if calculation time exceeds (seconds)
+    max_calculation_time: 30
+    # Minimum returns data points required
+    min_returns_data_points: 10
+
+# Development Settings
+development:
+  debug: false
+  verbose_logging: false
+  mock_data: false  # Use mock data for testing
+  skip_slow_calculations: false  # Skip computationally expensive metrics</content>
+<parameter name="filePath">config/metrics_config.yaml

@@ -1,0 +1,44 @@
+# AI Trading Backtesting Platform Requirements
+# Includes Epic 17: AI-Native Research Lab Dependencies
+
+# Core Dependencies (Backtrader + IB)
+backtrader==1.9.78.123
+ib-insync==0.9.86
+pandas>=2.0.0
+numpy>=1.24.0
+PyYAML>=6.0
+
+# Epic 17: MLflow Experiment Tracking
+mlflow>=2.17.1
+psycopg2-binary>=2.9.9
+
+# Epic 17: Advanced Metrics Libraries (QuantStats Suite)
+quantstats>=0.0.62
+ipython>=8.0.0
+scipy>=1.11.0
+plotly>=5.18.0
+kaleido>=0.2.1
+
+# Epic 17: Optuna Bayesian Optimization (Future)
+optuna>=3.6.1
+sqlalchemy>=2.0.0
+
+# Monitoring & Visualization
+streamlit>=1.28.0
+seaborn>=0.12.0
+matplotlib>=3.7.0
+
+# Data Processing
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+
+# Development & Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Documentation
+sphinx>=7.1.0
+sphinx-rtd-theme>=1.3.0
+
+# Production
+gunicorn>=21.0.0
