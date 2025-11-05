@@ -94,10 +94,12 @@ source venv/bin/activate
 #### Enable MLflow Logging
 
 ```bash
-source venv/bin/activate
-python scripts/run_backtest.py \
-  --strategy strategies.sma_crossover.SMACrossover \
-  --symbols SPY --start 2020-01-01 --end 2024-12-31 \
+# Run inside Docker container
+docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/run_backtest.py \
+  --strategy strategies/sma_crossover.py \
+  --symbols SPY \
+  --start 2020-01-01 \
+  --end 2024-12-31 \
   --mlflow \
   --project Q1_2025 \
   --asset-class Equities \
@@ -145,12 +147,15 @@ Backtests now include:
 **Status**: ✅ Implemented - Optuna-based intelligent optimization with MLflow integration.
 
 ```bash
-source venv/bin/activate
-python scripts/optimize_strategy.py \
-  --strategy strategies.sma_crossover.SMACrossover \
-  --param-space scripts/sma_crossover_params.json \
-  --symbols SPY --start 2020-01-01 --end 2024-12-31 \
-  --metric sharpe_ratio --n-trials 100 \
+# Run inside Docker container
+docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_strategy.py \
+  --strategy strategies/sma_crossover.py \
+  --param-space /app/scripts/sma_crossover_params.json \
+  --symbols SPY \
+  --start 2020-01-01 \
+  --end 2024-12-31 \
+  --metric sharpe_ratio \
+  --n-trials 100 \
   --study-name sma_opt_v1
 ```
 
@@ -361,18 +366,55 @@ Configured in [config/cost_config.yaml](config/cost_config.yaml):
 
 ## Monitoring Dashboard
 
-Streamlit dashboard runs on port 8501:
+Streamlit dashboard runs on port 8501 with 9 tabs for comprehensive monitoring:
 
 ```bash
 # Access at http://localhost:8501
 ```
 
+### Dashboard Tabs
+
+1. **📊 Dashboard**: Account summary, risk metrics, equity curve
+2. **💼 Live Trading**: Active positions with P&L tracking
+3. **📜 Trade Log**: Complete trade history with execution details
+4. **📈 Performance**: Performance analytics and metrics
+5. **🔬 Backtests**: Historical backtest results (JSON-based)
+6. **⚙️ Optimization**: Parameter optimization history (JSON-based)
+7. **🧪 MLflow**: Experiment tracking and comparison (Epic 17)
+8. **🏥 Health**: System health monitoring and diagnostics
+9. **⚙️ Settings**: Environment variables and configuration
+
+### MLflow Integration (Epic 17)
+
+The **🧪 MLflow** tab provides AI Research Lab features:
+
+**Features**:
+- **Real-time Metrics**: Total experiments, runs, recent activity, failed runs
+- **Project Browser**: Filter experiments by project, asset class, strategy family
+- **Experiment Listing**: View all experiments with best Sharpe, returns, drawdown
+- **Experiment Comparison**: Select 2-5 experiments for side-by-side comparison
+- **Performance Charts**:
+  - Sharpe Ratio comparison (bar chart)
+  - Total Returns comparison (bar chart)
+  - Risk-Adjusted Returns scatter plot
+- **Link to MLflow UI**: Direct link to full MLflow UI (http://localhost:5000)
+
+**Usage**:
+1. Start platform: `./scripts/start.sh`
+2. Run backtests with MLflow: `--mlflow` flag
+3. Access dashboard: http://localhost:8501
+4. Navigate to MLflow tab
+5. Use filters and comparison tools
+
+**Note**: MLflow tab requires MLflow server running. If unavailable, dashboard shows warning with startup instructions.
+
+### Data Access
+
 Dashboard has read-only access to:
 - `data/` - Historical data
-- `results/` - Backtest outputs
+- `results/` - Backtest outputs (JSON files)
 - `logs/` - Application logs
-
-**Note**: Dashboard integration with Backtrader backtest results is pending (US-12.6 from Epic 12).
+- **MLflow Server**: Experiment tracking via http://mlflow:5000
 
 ## Configuration Files
 
@@ -476,6 +518,60 @@ Three specialized skills available for automation:
 **parameter-optimizer**: Optimize strategy parameters (Epic 14)
 
 These auto-invoke when Claude detects related natural language requests.
+
+## AI Code Delegation (Gemini Integration)
+
+For large-scale implementation tasks, Claude Code can delegate work to Gemini AI to leverage its long context window and code generation capabilities while maintaining project context and coding standards.
+
+### When to Use Gemini Delegation
+
+**Ideal Use Cases**:
+- **Multi-File Implementations**: Implementing features across 5+ files simultaneously
+- **Large-Scale Refactoring**: Applying consistent changes across entire directories (e.g., converting callback patterns to async/await)
+- **Comprehensive Testing**: Writing unit tests for multiple modules at once
+- **New Module Development**: Implementing complete modules from specifications
+
+**Examples**:
+```bash
+# Multi-file feature implementation
+"Implement authentication system across user service, auth middleware, and token validation modules"
+
+# Large-scale refactoring
+"Refactor entire data pipeline in strategies/ to use async/await patterns consistently"
+
+# Comprehensive testing
+"Write comprehensive unit tests for strategies/base_strategy.py and strategies/risk_manager.py"
+
+# Module from spec
+"Implement risk_calculator.py based on specifications in docs/risk_spec.md"
+```
+
+### How It Works
+
+1. **Automatic Detection**: Claude Code detects when a task is better suited for Gemini (large scope, multi-file changes)
+2. **Context Preservation**: Project context, coding standards, and architectural patterns are passed to Gemini
+3. **Constrained Execution**: File boundaries and modification scope are strictly controlled
+4. **Quality Assurance**: Generated code is validated against project standards
+
+### Benefits
+
+- **Long Context Window**: Handle larger codebases and more complex changes in a single pass
+- **Parallel Processing**: Multi-file implementations without sequential bottlenecks
+- **Consistency**: Apply patterns consistently across multiple files
+- **Efficiency**: Faster turnaround for large-scale coding tasks
+
+### Manual Invocation
+
+While Claude Code automatically delegates when appropriate, you can explicitly request Gemini delegation:
+
+```bash
+# Explicit delegation request
+"Use Gemini to implement the entire risk management module across these 8 files"
+```
+
+**Important Notes**:
+- Gemini delegation is most effective for implementation tasks. For analysis, architecture design, or debugging, Claude Code's native capabilities are typically better suited.
+- **Always use maximum bash timeout** (600000ms / 10 minutes) when delegating to Gemini, as large-scale code generation can take significant time to complete.
 
 ## Strategy Development Guide
 

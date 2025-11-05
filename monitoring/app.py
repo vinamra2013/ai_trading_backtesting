@@ -49,6 +49,25 @@ def get_db_manager():
         st.error(f"Database connection failed: {e}")
         return None
 
+@st.cache_resource
+def get_mlflow_client():
+    """Get MLflow client and ProjectManager instances."""
+    try:
+        import mlflow
+        from scripts.project_manager import ProjectManager
+
+        # Set MLflow tracking URI
+        mlflow.set_tracking_uri("http://mlflow:5000")
+
+        # Initialize ProjectManager
+        pm = ProjectManager()
+
+        return {"mlflow": mlflow, "project_manager": pm}
+    except Exception as e:
+        st.warning(f"MLflow connection unavailable: {e}")
+        st.info("MLflow features require the MLflow server to be running. Start with ./scripts/start.sh")
+        return None
+
 @st.cache_data(ttl=5)
 def get_positions_data():
     """Get current positions with P&L calculations."""
@@ -299,13 +318,14 @@ with col4:
 st.markdown("---")
 
 # Tabs for different views
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "📊 Dashboard",
     "💼 Live Trading",
     "📜 Trade Log",
     "📈 Performance",
     "🔬 Backtests",
     "⚙️ Optimization",
+    "🧪 MLflow",
     "🏥 Health",
     "⚙️ Settings"
 ])
@@ -1095,6 +1115,242 @@ with tab6:
         st.info("Make sure optimization results are available in /app/results/optimizations/")
 
 with tab7:
+    st.header("🧪 MLflow Experiments")
+
+    # Get MLflow client
+    mlflow_client = get_mlflow_client()
+
+    if not mlflow_client:
+        st.error("MLflow server is not available. Please start the platform with ./scripts/start.sh")
+        st.stop()
+
+    mlflow = mlflow_client["mlflow"]
+    pm = mlflow_client["project_manager"]
+
+    # Summary metrics at top
+    st.subheader("📊 Research Lab Overview")
+    col1, col2, col3, col4 = st.columns(4)
+
+    try:
+        # Get all experiments
+        experiments = mlflow.search_experiments()
+        total_experiments = len([e for e in experiments if e.lifecycle_stage == 'active'])
+
+        # Get all runs
+        all_runs = mlflow.search_runs(experiment_ids=[e.experiment_id for e in experiments], max_results=10000)
+        total_runs = len(all_runs)
+
+        # Get recent runs (last 7 days)
+        from datetime import datetime, timedelta
+        import pandas as pd
+        week_ago = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=7)
+        recent_runs = [r for r in all_runs.itertuples() if pd.notna(r.start_time) and r.start_time > week_ago]
+
+        # Get failed runs
+        failed_runs = len([r for r in all_runs.itertuples() if r.status != 'FINISHED'])
+
+        with col1:
+            st.metric("Total Experiments", total_experiments)
+        with col2:
+            st.metric("Total Runs", total_runs)
+        with col3:
+            st.metric("Recent Runs (7d)", len(recent_runs))
+        with col4:
+            st.metric("Failed Runs", failed_runs, delta=f"-{failed_runs}" if failed_runs > 0 else "0")
+    except Exception as e:
+        st.error(f"Error fetching MLflow metrics: {e}")
+
+    st.markdown("---")
+
+    # Project browser
+    st.subheader("🔍 Browse Experiments")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        # Project filter
+        projects = pm.list_projects()
+        selected_project = st.selectbox("Filter by Project", ["All"] + projects)
+
+    with col2:
+        # Asset class filter
+        asset_classes = pm.list_asset_classes()
+        selected_asset_class = st.selectbox("Filter by Asset Class", ["All"] + asset_classes)
+
+    with col3:
+        # Strategy family filter
+        strategy_families = pm.list_strategy_families()
+        selected_strategy_family = st.selectbox("Filter by Strategy Family", ["All"] + strategy_families)
+
+    # Query experiments based on filters
+    try:
+        if selected_project != "All":
+            experiments = pm.query_by_project(selected_project)
+        elif selected_asset_class != "All":
+            experiments = pm.query_by_asset_class(selected_asset_class)
+        elif selected_strategy_family != "All":
+            experiments = pm.query_by_strategy_family(selected_strategy_family)
+        else:
+            experiments = mlflow.search_experiments()
+
+        # Display experiments
+        if experiments:
+            st.write(f"**Found {len(experiments)} experiments**")
+
+            # Create experiment list
+            exp_data = []
+            for exp in experiments:
+                # Get best run for this experiment
+                runs = mlflow.search_runs(experiment_ids=[exp.experiment_id], max_results=1, order_by=["metrics.sharpe_ratio DESC"])
+
+                if len(runs) > 0:
+                    best_run = runs.iloc[0]
+                    exp_data.append({
+                        "Experiment": exp.name,
+                        "Runs": mlflow.search_runs(experiment_ids=[exp.experiment_id]).shape[0],
+                        "Best Sharpe": f"{best_run.get('metrics.sharpe_ratio', 0):.2f}" if 'metrics.sharpe_ratio' in best_run else "N/A",
+                        "Best Return": f"{best_run.get('metrics.total_return', 0):.2%}" if 'metrics.total_return' in best_run else "N/A",
+                        "Max Drawdown": f"{best_run.get('metrics.max_drawdown', 0):.2%}" if 'metrics.max_drawdown' in best_run else "N/A",
+                        "Created": exp.creation_time
+                    })
+
+            if exp_data:
+                df = pd.DataFrame(exp_data)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+                # Link to MLflow UI
+                st.info("🔗 For advanced features, open the [MLflow UI](http://localhost:5000)")
+            else:
+                st.info("No runs found for these experiments yet.")
+        else:
+            st.info("No experiments found matching your filters.")
+
+    except Exception as e:
+        st.error(f"Error querying experiments: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+
+    st.markdown("---")
+
+    # Experiment comparison
+    st.subheader("🔬 Compare Experiments")
+
+    try:
+        # Get all experiments for multi-select
+        all_experiments = mlflow.search_experiments()
+        experiment_options = {exp.name: exp.experiment_id for exp in all_experiments if exp.lifecycle_stage == 'active'}
+
+        if experiment_options:
+            # Multi-select experiments
+            selected_experiments = st.multiselect(
+                "Select experiments to compare (2-5 recommended)",
+                options=list(experiment_options.keys()),
+                max_selections=5
+            )
+
+            if len(selected_experiments) >= 2:
+                st.write(f"**Comparing {len(selected_experiments)} experiments**")
+
+                # Get runs for selected experiments
+                selected_exp_ids = [experiment_options[exp] for exp in selected_experiments]
+                comparison_data = []
+
+                for exp_name in selected_experiments:
+                    exp_id = experiment_options[exp_name]
+                    # Get best run for each experiment
+                    runs = mlflow.search_runs(experiment_ids=[exp_id], max_results=1, order_by=["metrics.sharpe_ratio DESC"])
+
+                    if len(runs) > 0:
+                        best_run = runs.iloc[0]
+                        comparison_data.append({
+                            "Experiment": exp_name,
+                            "Sharpe Ratio": f"{best_run.get('metrics.sharpe_ratio', 0):.2f}" if 'metrics.sharpe_ratio' in best_run else "N/A",
+                            "Total Return": f"{best_run.get('metrics.total_return', 0):.2%}" if 'metrics.total_return' in best_run else "N/A",
+                            "Max Drawdown": f"{best_run.get('metrics.max_drawdown', 0):.2%}" if 'metrics.max_drawdown' in best_run else "N/A",
+                            "Win Rate": f"{best_run.get('metrics.win_rate', 0):.2%}" if 'metrics.win_rate' in best_run else "N/A",
+                            "Sortino Ratio": f"{best_run.get('metrics.sortino_ratio', 0):.2f}" if 'metrics.sortino_ratio' in best_run else "N/A",
+                            "Calmar Ratio": f"{best_run.get('metrics.calmar_ratio', 0):.2f}" if 'metrics.calmar_ratio' in best_run else "N/A"
+                        })
+
+                if comparison_data:
+                    df_comparison = pd.DataFrame(comparison_data)
+                    st.dataframe(df_comparison, use_container_width=True, hide_index=True)
+
+                    # Performance charts
+                    st.subheader("📊 Performance Comparison")
+
+                    # Create radar chart for multi-dimensional comparison
+                    try:
+                        metrics_for_chart = []
+                        for exp_name in selected_experiments:
+                            exp_id = experiment_options[exp_name]
+                            runs = mlflow.search_runs(experiment_ids=[exp_id], max_results=1, order_by=["metrics.sharpe_ratio DESC"])
+
+                            if len(runs) > 0:
+                                best_run = runs.iloc[0]
+                                metrics_for_chart.append({
+                                    "Experiment": exp_name,
+                                    "Sharpe": best_run.get('metrics.sharpe_ratio', 0),
+                                    "Returns": best_run.get('metrics.total_return', 0) * 100,  # Convert to percentage
+                                    "Win Rate": best_run.get('metrics.win_rate', 0) * 100,
+                                    "Sortino": best_run.get('metrics.sortino_ratio', 0),
+                                    "Calmar": best_run.get('metrics.calmar_ratio', 0)
+                                })
+
+                        if metrics_for_chart:
+                            # Bar chart comparison
+                            metrics_df = pd.DataFrame(metrics_for_chart)
+
+                            col1, col2 = st.columns(2)
+
+                            with col1:
+                                fig_sharpe = px.bar(
+                                    metrics_df,
+                                    x="Experiment",
+                                    y="Sharpe",
+                                    title="Sharpe Ratio Comparison",
+                                    labels={"Sharpe": "Sharpe Ratio"}
+                                )
+                                st.plotly_chart(fig_sharpe, use_container_width=True)
+
+                            with col2:
+                                fig_returns = px.bar(
+                                    metrics_df,
+                                    x="Experiment",
+                                    y="Returns",
+                                    title="Total Returns Comparison",
+                                    labels={"Returns": "Total Return (%)"}
+                                )
+                                st.plotly_chart(fig_returns, use_container_width=True)
+
+                            # Risk-adjusted return scatter
+                            fig_scatter = px.scatter(
+                                metrics_df,
+                                x="Sharpe",
+                                y="Returns",
+                                text="Experiment",
+                                title="Risk-Adjusted Returns (Sharpe vs Total Return)",
+                                labels={"Sharpe": "Sharpe Ratio", "Returns": "Total Return (%)"}
+                            )
+                            fig_scatter.update_traces(textposition='top center', marker=dict(size=12))
+                            st.plotly_chart(fig_scatter, use_container_width=True)
+
+                    except Exception as chart_error:
+                        st.error(f"Error creating charts: {chart_error}")
+
+            elif len(selected_experiments) == 1:
+                st.info("Select at least 2 experiments to compare.")
+            else:
+                st.info("Select experiments above to compare their performance.")
+        else:
+            st.info("No experiments available for comparison.")
+
+    except Exception as e:
+        st.error(f"Error in experiment comparison: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+
+with tab8:
     st.header("🏥 System Health")
     
     # Health monitoring section
@@ -1200,7 +1456,7 @@ with tab7:
         st.error(f"Health monitoring not available: {e}")
         st.info("Health monitoring requires proper system permissions and dependencies.")
 
-with tab8:
+with tab9:
     st.header("Settings")
     
     st.subheader("Environment Variables")

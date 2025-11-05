@@ -10,7 +10,8 @@ RUN pip install --upgrade pip && \
     streamlit \
     pandas \
     plotly \
-    pyyaml
+    pyyaml \
+    mlflow
 
 # Copy monitoring code
 COPY monitoring/ /app/monitoring/

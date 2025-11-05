@@ -342,7 +342,8 @@ class BacktestRunner:
             print(f"Results written to {output_json}")
         else:
             # Output to stdout for backward compatibility
-            print(json.dumps(backtest_results))
+            # print(json.dumps(backtest_results))  # Commented out - too verbose
+            pass
 
         # Optional exports using parser
         if export_csv or export_text:

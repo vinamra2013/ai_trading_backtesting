@@ -18,7 +18,8 @@ services:
       - PYTHONUNBUFFERED=1
       - BACKTRADER_ENGINE_PATH=/app
       - PYTHONPATH=/app
-       - MLFLOW_TRACKING_URI=http://172.25.0.5:5000
+      - MLFLOW_TRACKING_URI=http://172.25.0.5:5000
+      - IB_HOST=${IB_HOST}
     networks:
       - trading-network
     depends_on:
