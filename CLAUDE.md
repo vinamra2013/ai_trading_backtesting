@@ -140,10 +140,57 @@ Backtests now include:
 - **Alpha/Beta**: Benchmark comparison vs SPY
 - **HTML Tearsheets**: Comprehensive performance reports
 
-# Optimize parameters (Epic 14 - pending)
+#### Bayesian Parameter Optimization (Epic 17)
+
+**Status**: ✅ Implemented - Optuna-based intelligent optimization with MLflow integration.
+
+```bash
+source venv/bin/activate
 python scripts/optimize_strategy.py \
   --strategy strategies.sma_crossover.SMACrossover \
-  --param-ranges "sma_short:10-30,sma_long:40-80"
+  --param-space scripts/sma_crossover_params.json \
+  --symbols SPY --start 2020-01-01 --end 2024-12-31 \
+  --metric sharpe_ratio --n-trials 100 \
+  --study-name sma_opt_v1
+```
+
+**Features**:
+- **Bayesian Optimization**: Optuna TPE sampler for intelligent parameter search
+- **Distributed Execution**: 4-worker parallel optimization
+- **MLflow Integration**: Parent-child run structure for study tracking
+- **Parameter Constraints**: Strategy-aware validation (SMA fast < slow)
+- **Study Resumption**: Continue interrupted optimization studies
+
+#### Project Management (Epic 17)
+
+**Status**: ✅ Implemented - Intelligent experiment organization and querying.
+
+```python
+from scripts.project_manager import ProjectManager
+
+pm = ProjectManager()
+
+# Create organized experiments
+exp_id = pm.create_experiment(
+    project="Q1_2025",
+    asset_class="Equities",
+    strategy_family="MeanReversion",
+    strategy="SMACrossover"
+)
+
+# Query experiments
+equity_experiments = pm.query_by_asset_class("Equities")
+research_projects = pm.query_by_status("research")
+
+# Compare strategies
+comparison = pm.compare_strategies("Q1_2025", "sharpe_ratio")
+```
+
+**Query Patterns**:
+- `query_by_project("Q1_2025")` - All experiments in project
+- `query_by_asset_class("Equities")` - All equity strategies
+- `query_by_strategy_family("MeanReversion")` - All mean reversion strategies
+- `query_recent_experiments(days=7)` - Recent experiments
 
 # Deploy to live trading
 ./scripts/start_live_trading.sh
@@ -179,6 +226,42 @@ data/
 ├── processed/  # Cleaned/transformed data
 └── sqlite/     # Trade history database
 ```
+
+## Database Optimization (Epic 17)
+
+**Status**: ✅ Implemented - PostgreSQL performance optimization and archival strategies.
+
+### Performance Optimization
+
+The platform includes automated database optimization scripts for MLflow PostgreSQL backend:
+
+```bash
+source venv/bin/activate
+python scripts/db_optimizer.py
+```
+
+This generates:
+- `scripts/db_optimization/performance_indexes.sql` - Index optimization
+- `scripts/db_optimization/archive_data_90days.sql` - Data archival
+- `scripts/db_optimization/cleanup_maintenance.sql` - Maintenance scripts
+- `scripts/db_optimization/performance_monitoring.sql` - Monitoring queries
+- `scripts/db_optimization/scaling_guide.md` - Scaling documentation
+
+### Key Optimizations
+
+- **Composite Indexes**: Optimized for common query patterns
+- **Partial Indexes**: Efficient queries on recent data
+- **Archival Strategy**: Automatic archiving of experiments >90 days old
+- **Maintenance Scripts**: Automated cleanup and reindexing
+- **Performance Monitoring**: Query performance tracking
+
+### Scaling Guide
+
+See `scripts/db_optimization/scaling_guide.md` for:
+- Vertical scaling recommendations
+- Connection pooling setup
+- Backup strategies
+- Troubleshooting common issues
 
 ## Live Trading
 

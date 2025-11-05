@@ -11,9 +11,10 @@ import argparse
 import sys
 import json
 import uuid
+import os
 from datetime import datetime
 from pathlib import Path
-from typing import Type, Dict, List
+from typing import Type, Dict, List, Optional
 import importlib.util
 import backtrader as bt
 import yaml
@@ -140,7 +141,8 @@ class BacktestRunner:
             # MLflow parameters
             mlflow_enabled: bool = False, project: str = "Default",
             asset_class: str = "Equities", strategy_family: str = "Unknown",
-            team: str = "quant_research", status: str = "research") -> Dict:
+            team: str = "quant_research", status: str = "research",
+            output_json: Optional[str] = None) -> Dict:
         """Run backtest and return results with optional MLflow logging.
 
         Args:
@@ -331,6 +333,17 @@ class BacktestRunner:
         with open(output_file, 'w') as f:
             json.dump(backtest_results, f, indent=2)
 
+        # Output JSON results
+        if output_json:
+            # Write to specified file for optimizer
+            print(f"Writing results to {output_json}")
+            with open(output_json, 'w') as f:
+                json.dump(backtest_results, f, indent=2)
+            print(f"Results written to {output_json}")
+        else:
+            # Output to stdout for backward compatibility
+            print(json.dumps(backtest_results))
+
         # Optional exports using parser
         if export_csv or export_text:
             parser = BacktraderResultParser()
@@ -415,6 +428,7 @@ def main():
     parser.add_argument('--end', required=True, help='End date (YYYY-MM-DD)')
     parser.add_argument('--resolution', default='Daily', help='Resolution')
     parser.add_argument('--params', type=json.loads, default={}, help='Strategy params as JSON')
+    parser.add_argument('--params-file', help='JSON file containing strategy parameters')
     parser.add_argument('--config', default='/app/config/backtest_config.yaml', help='Config file')
     parser.add_argument('--export-csv', action='store_true', help='Export trades to CSV')
     parser.add_argument('--export-text', action='store_true', help='Export text summary report')
@@ -427,8 +441,25 @@ def main():
     parser.add_argument('--team', default='quant_research', help='Team responsible for experiment')
     parser.add_argument('--status', default='research', help='Experiment status (research, testing, production)')
     parser.add_argument('--mlflow-config', default='/app/config/mlflow_config.yaml', help='MLflow config file')
+    parser.add_argument('--output-json', help='Output JSON file for results (for optimizer)')
 
     args = parser.parse_args()
+
+    # Load parameters from file if specified
+    if args.params_file:
+        if not os.path.exists(args.params_file):
+            print(f"❌ Error: Parameter file not found: {args.params_file}")
+            sys.exit(1)
+        try:
+            with open(args.params_file, 'r') as f:
+                file_params = json.load(f)
+            # Merge file params with command line params (command line takes precedence)
+            args.params.update(file_params)
+            print(f"📄 Loaded parameters from {args.params_file}")
+        except json.JSONDecodeError as e:
+            print(f"❌ Error parsing parameter file {args.params_file}: {e}")
+            sys.exit(1)
+
     runner = BacktestRunner(config_path=args.config, mlflow_config_path=args.mlflow_config)
 
     try:
@@ -439,7 +470,8 @@ def main():
             export_csv=args.export_csv, export_text=args.export_text,
             mlflow_enabled=args.mlflow,
             project=args.project, asset_class=args.asset_class,
-            strategy_family=args.strategy_family, team=args.team, status=args.status
+            strategy_family=args.strategy_family, team=args.team, status=args.status,
+            output_json=args.output_json
         )
         sys.exit(0)
     except Exception as e:

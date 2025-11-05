@@ -19,8 +19,8 @@ scipy>=1.11.0
 plotly>=5.18.0
 kaleido>=0.2.1
 
-# Epic 17: Optuna Bayesian Optimization (Future)
-optuna>=3.6.1
+# Epic 17: Optuna Bayesian Optimization
+optuna>=4.5.0
 sqlalchemy>=2.0.0
 
 # Monitoring & Visualization

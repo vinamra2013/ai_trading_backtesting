@@ -8,7 +8,9 @@ Algorithmic trading system built on **Backtrader** (open-source) with Interactiv
 
 - **Backtrader Engine**: Open-source Python backtesting and live trading framework
 - **Interactive Brokers**: Broker connectivity (paper/live trading) via ib_insync
+- **AI Research Lab**: MLflow experiment tracking, Optuna Bayesian optimization, advanced metrics
 - **Risk Management**: Position limits, loss limits, concentration controls (library)
+- **PostgreSQL + MLflow**: Centralized experiment tracking and artifact storage
 - **SQLite Database**: Trade history and performance tracking
 - **Streamlit Dashboard**: Real-time monitoring and analytics
 - **Docker**: Containerized deployment with service orchestration
@@ -212,10 +214,40 @@ python scripts/run_backtest.py \
   --start 2020-01-01 \
   --end 2024-12-31
 
-# Optimize parameters (Epic 14)
+# AI Research Lab Features (Epic 17)
+
+## MLflow Experiment Tracking
+
+```bash
+# Run backtest with MLflow logging
+python scripts/run_backtest.py \
+  --strategy strategies.sma_crossover.SMACrossover \
+  --symbols SPY --start 2020-01-01 --end 2024-12-31 \
+  --mlflow \
+  --project Q1_2025 \
+  --asset-class Equities \
+  --strategy-family MeanReversion
+```
+
+Access MLflow UI at: http://localhost:5000
+
+## Bayesian Parameter Optimization
+
+```bash
+# Intelligent parameter optimization with Optuna
 python scripts/optimize_strategy.py \
   --strategy strategies.sma_crossover.SMACrossover \
-  --param-ranges "sma_short:10-30,sma_long:40-80"
+  --param-space scripts/sma_crossover_params.json \
+  --symbols SPY --start 2020-01-01 --end 2024-12-31 \
+  --metric sharpe_ratio --n-trials 100 \
+  --study-name sma_opt_v1
+```
+
+Features:
+- Bayesian optimization (10x faster than grid search)
+- Distributed execution (4 workers)
+- MLflow integration with parent-child run structure
+- Parameter constraints and validation
 
 # Start live trading
 ./scripts/start_live_trading.sh
