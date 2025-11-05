@@ -1,0 +1,52 @@
+# Backtrader Backtest Configuration for Testing
+# Epic 12: US-12.7 - Configuration Management
+
+# Cerebro engine settings
+engine: cerebro
+initial_capital: 100000
+
+# Data settings
+data:
+  resolution: Daily  # Options: Daily, Hour, Minute, 5Minute, 15Minute, 30Minute
+  feed_type: csv     # Options: csv, pandas, ib_live
+  data_dir: data/csv
+
+# Broker settings
+broker:
+  commission_scheme: ib_standard  # Options: ib_standard, ib_pro
+  slippage_perc: 0.0005  # 5 bps (0.05%) for market orders
+  cash: 100000
+
+# Execution settings
+execution:
+  cheat_on_open: false  # Use next bar open for orders (not recommended)
+  plot: false           # Generate plots (resource intensive)
+
+# Analyzers to add
+analyzers:
+  - SharpeRatio
+  - DrawDown
+  - Returns
+  - TradeAnalyzer
+  - TimeReturn
+  - SQN
+  - VWR
+
+# Benchmark settings
+benchmark:
+  symbol: SPY
+  enabled: true
+
+# Results storage
+results:
+  output_dir: results/backtests
+  save_trades: true
+  save_equity_curve: true
+  generate_report: true
+  format: json  # Options: json, csv, pickle
+
+# Performance settings
+performance:
+  parallel_enabled: true
+  max_workers: 8
+  cache_results: true

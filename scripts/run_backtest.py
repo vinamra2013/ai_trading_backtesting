@@ -40,11 +40,11 @@ except ImportError as e:
 class BacktestRunner:
     """Backtest execution runner for Backtrader strategies with MLflow integration"""
 
-    def __init__(self, config_path: str = '/app/config/backtest_config.yaml',
-                 mlflow_config_path: str = '/app/config/mlflow_config.yaml'):
+    def __init__(self, config_path: str = 'config/backtest_config.yaml',
+                  mlflow_config_path: str = 'config/mlflow_config.yaml'):
         self.config_path = config_path
         self.mlflow_config_path = mlflow_config_path
-        self.results_dir = Path('/app/results/backtests')
+        self.results_dir = Path('results/backtests')
         self.results_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize MLflow logger

@@ -34,14 +34,6 @@ except ImportError:
     logger.warning("QuantStats library not available. Install with: pip install quantstats")
 
 try:
-    import empyrical
-    EMPYRICAL_AVAILABLE = True
-    logger.info("Empyrical library loaded successfully")
-except ImportError:
-    EMPYRICAL_AVAILABLE = False
-    logger.warning("Empyrical library not available. Some metrics may be limited.")
-
-try:
     import plotly.graph_objects as go
     import plotly.express as px
     from plotly.subplots import make_subplots
@@ -158,8 +150,8 @@ class QuantStatsAnalyzer:
             # Total return
             metrics['total_return'] = qs.stats.comp(returns)
             
-            # Annualized return
-            metrics['annual_return'] = qs.stats.annualized_return(returns)
+            # Compound Annual Growth Rate (CAGR)
+            metrics['cagr'] = qs.stats.cagr(returns)
             
             # Volatility
             metrics['annual_volatility'] = qs.stats.volatility(returns)
@@ -247,10 +239,10 @@ class QuantStatsAnalyzer:
             # Kurtosis
             metrics['kurtosis'] = returns.kurtosis()
             
-            # Jarque-Bera test (normality test)
-            jb_stat, jb_pvalue = qs.stats.jarque_bera(returns)
-            metrics['jarque_bera_stat'] = jb_stat
-            metrics['jarque_bera_pvalue'] = jb_pvalue
+            # Jarque-Bera test (normality test) - Not available in current QuantStats version
+            # jb_stat, jb_pvalue = qs.stats.jarque_bera(returns)
+            # metrics['jarque_bera_stat'] = jb_stat
+            # metrics['jarque_bera_pvalue'] = jb_pvalue
             
             # Rolling volatility (30-day)
             rolling_vol = returns.rolling(30).std() * np.sqrt(252)
@@ -279,18 +271,28 @@ class QuantStatsAnalyzer:
             strategy_aligned = aligned_data['strategy']
             benchmark_aligned = aligned_data['benchmark']
             
-            # Alpha and Beta
-            metrics['alpha'] = qs.stats.alpha(strategy_aligned, benchmark_aligned, rf=self.risk_free_rate)
-            metrics['beta'] = qs.stats.beta(strategy_aligned, benchmark_aligned)
-            
+            # Calculate Alpha and Beta manually using standard formulas
+            # Beta = Covariance(strategy, benchmark) / Variance(benchmark)
+            cov_matrix = np.cov(strategy_aligned, benchmark_aligned)
+            beta = cov_matrix[0, 1] / cov_matrix[1, 1] if cov_matrix[1, 1] != 0 else 0
+            metrics['beta'] = beta
+
+            # Alpha = (Strategy Return - RF) - Beta * (Benchmark Return - RF)
+            # Simplified: assuming RF = 0 for now
+            avg_strategy_return = strategy_aligned.mean()
+            avg_benchmark_return = benchmark_aligned.mean()
+            alpha = avg_strategy_return - beta * avg_benchmark_return
+            metrics['alpha'] = alpha
+
             # Information ratio
             metrics['information_ratio'] = qs.stats.information_ratio(strategy_aligned, benchmark_aligned)
-            
+
             # R-squared
             metrics['r_squared'] = qs.stats.r_squared(strategy_aligned, benchmark_aligned)
-            
-            # Tracking error
-            metrics['tracking_error'] = qs.stats.tracking_error(strategy_aligned, benchmark_aligned)
+
+            # Tracking error = StdDev(Strategy Return - Benchmark Return)
+            tracking_error = (strategy_aligned - benchmark_aligned).std()
+            metrics['tracking_error'] = tracking_error
             
         except Exception as e:
             logger.warning(f"Error calculating benchmark metrics: {e}")
@@ -494,9 +496,9 @@ class QuantStatsAnalyzer:
                 'win_rate', 'profit_factor', 'avg_win', 'avg_loss'
             ],
             'distribution': [
-                'skewness', 'kurtosis', 'jarque_bera_stat', 'jarque_bera_pvalue', 'avg_rolling_volatility'
+                'skewness', 'kurtosis', 'avg_rolling_volatility'
             ],
             'benchmark': [
-                'alpha', 'beta', 'information_ratio', 'r_squared', 'tracking_error'
+                'information_ratio', 'r_squared'
             ]
         }

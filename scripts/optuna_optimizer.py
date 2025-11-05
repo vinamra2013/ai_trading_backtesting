@@ -285,11 +285,11 @@ class OptunaOptimizer:
             )
 
             # Extract the metric to optimize
-            if result and 'metrics' in result:
-                metric_value = self._extract_metric(result['metrics'], metric)
+            if result and 'performance' in result:
+                metric_value = self._extract_metric(result['performance'], metric)
                 if metric_value is not None:
                     logger.info("Trial %d: %s = %.4f, Params: %s",
-                              trial.number, metric, metric_value, params)
+                               trial.number, metric, metric_value, params)
                     return metric_value
                 else:
                     logger.warning("Trial %d: Metric '%s' not found in results", trial.number, metric)
@@ -447,6 +447,12 @@ class OptunaOptimizer:
             if result.returncode != 0:
                 logger.warning("Backtest failed with return code %d", result.returncode)
                 logger.debug("STDERR: %s", result.stderr[-500:] if result.stderr else "No stderr")
+
+            return None
+            if result.returncode != 0:
+                logger.warning("Backtest failed with return code %d", result.returncode)
+                logger.warning("STDERR: %s", result.stderr[-1000:] if result.stderr else "No stderr")
+                logger.warning("STDOUT: %s", result.stdout[-1000:] if result.stdout else "No stdout")
 
             return None
 
