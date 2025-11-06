@@ -35,6 +35,17 @@ from scripts.mlflow_logger import MLflowBacktestLogger
 from scripts.data_quality_check import load_data
 from scripts.backtest_parser import BacktestResultParser
 
+# Import parallel backtesting for distributed execution
+PARALLEL_BACKTEST_AVAILABLE = False
+ParallelBacktestOrchestrator = None
+
+try:
+    from scripts.parallel_backtest import ParallelBacktestOrchestrator
+    PARALLEL_BACKTEST_AVAILABLE = True
+    print("✅ Parallel backtesting available for walk-forward analysis")
+except ImportError as e:
+    print(f"⚠️  Parallel backtesting not available, using sequential execution: {e}")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -323,6 +334,133 @@ class WalkForwardAnalyzer:
     ) -> Dict[str, Any]:
         """
         Test optimized parameters on out-of-sample data.
+        Uses parallel backtesting if available, otherwise falls back to sequential execution.
+        """
+        # Get strategy path for parallel backtesting
+        strategy_path = self._get_strategy_path(strategy_class)
+
+        # Use parallel backtesting if available
+        if PARALLEL_BACKTEST_AVAILABLE and len(symbols) > 1:
+            logger.info("Using parallel backtesting for %d symbols", len(symbols))
+            return self._test_parallel(
+                strategy_path=strategy_path,
+                params=params,
+                symbols=symbols,
+                test_start=test_start,
+                test_end=test_end,
+                initial_cash=initial_cash,
+                commission=commission
+            )
+        else:
+            logger.info("Using sequential backtesting")
+            return self._test_sequential(
+                strategy_class=strategy_class,
+                params=params,
+                symbols=symbols,
+                test_start=test_start,
+                test_end=test_end,
+                initial_cash=initial_cash,
+                commission=commission
+            )
+
+    def _get_strategy_path(self, strategy_class: bt.Strategy) -> str:
+        """Get the file path for a strategy class."""
+        # This is a simplified approach - in practice, you'd need to map class to file
+        # For now, we'll use a mapping or require the path to be passed
+        strategy_name = strategy_class.__name__.lower()
+        possible_paths = [
+            f"strategies/{strategy_name}.py",
+            f"strategies/{strategy_name}_strategy.py",
+            f"strategies/{strategy_name}_risk_managed.py"
+        ]
+
+        for path in possible_paths:
+            if os.path.exists(path):
+                return path
+
+        # Fallback - this would need to be improved
+        return f"strategies/{strategy_name}.py"
+
+    def _test_parallel(
+        self,
+        strategy_path: str,
+        params: Dict[str, Any],
+        symbols: List[str],
+        test_start: str,
+        test_end: str,
+        initial_cash: float,
+        commission: float
+    ) -> Dict[str, Any]:
+        """Test using parallel backtesting system."""
+        try:
+            # Initialize parallel orchestrator
+            orchestrator = ParallelBacktestOrchestrator(
+                redis_host='redis',
+                redis_port=6379
+            )
+
+            # Prepare strategy parameters for each symbol
+            strategy_params = {symbol: params for symbol in symbols}
+
+            # Run parallel backtests
+            results_df = orchestrator.execute_batch(
+                symbols=symbols,
+                strategies=[strategy_path],
+                strategy_params=strategy_params,
+                show_progress=False  # Disable progress for walk-forward
+            )
+
+            # Aggregate results across all symbols
+            if not results_df.empty:
+                # Calculate weighted averages based on number of trades or returns
+                total_return = results_df['total_return'].mean()
+                sharpe_ratio = results_df['sharpe_ratio'].mean()
+                max_drawdown = results_df['max_drawdown'].max()  # Worst case
+                total_trades = results_df['total_trades'].sum()
+
+                metrics = {
+                    'total_return': total_return,
+                    'sharpe_ratio': sharpe_ratio,
+                    'max_drawdown': max_drawdown,
+                    'total_trades': total_trades,
+                    'symbols_tested': len(symbols),
+                    'execution_method': 'parallel'
+                }
+
+                return {
+                    'success': True,
+                    'metrics': metrics,
+                    'raw_results': results_df.to_dict('records')
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': 'No results from parallel backtesting',
+                    'metrics': {}
+                }
+
+        except Exception as e:
+            print(f"Parallel backtesting failed: {e}")
+            # Fallback to sequential - but we need strategy_class, so this is tricky
+            # For now, return error
+            return {
+                'success': False,
+                'error': f'Parallel backtesting failed: {e}',
+                'metrics': {}
+            }
+
+    def _test_sequential(
+        self,
+        strategy_class: bt.Strategy,
+        params: Dict[str, Any],
+        symbols: List[str],
+        test_start: str,
+        test_end: str,
+        initial_cash: float,
+        commission: float
+    ) -> Dict[str, Any]:
+        """
+        Test optimized parameters on out-of-sample data (sequential fallback).
         """
         try:
             cerebro = bt.Cerebro()

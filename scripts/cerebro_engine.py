@@ -161,7 +161,7 @@ class CerebroEngine:
     def add_multiple_data(
         self,
         symbols: List[str],
-        data_dir: str = '/app/data/csv',
+        data_dir: Optional[str] = None,
         resolution: str = 'Daily',
         fromdate: Optional[datetime] = None,
         todate: Optional[datetime] = None
@@ -171,12 +171,14 @@ class CerebroEngine:
 
         Args:
             symbols: List of stock symbols
-            data_dir: Directory containing CSV files
+            data_dir: Directory containing CSV files (uses config if None)
             resolution: Data resolution (for filename)
             fromdate: Start date filter
             todate: End date filter
         """
-        data_path = Path(data_dir)
+        if data_dir is None:
+            data_dir = self.config.get('data', {}).get('data_dir', '/app/data/csv')
+        data_path = Path(str(data_dir))
 
         for symbol in symbols:
             csv_file = data_path / f"{symbol}_{resolution}.csv"

@@ -32,6 +32,9 @@ matplotlib>=3.7.0
 openpyxl>=3.1.0
 xlsxwriter>=3.1.0
 
+# Epic 20: Parallel Backtesting (Redis Queue)
+redis>=4.5.0
+
 # Development & Testing
 pytest>=7.4.0
 pytest-asyncio>=0.21.0

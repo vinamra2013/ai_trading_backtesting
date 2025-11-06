@@ -15,6 +15,7 @@ Features:
 """
 
 import mlflow
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
@@ -39,7 +40,7 @@ class MLflowBacktestLogger:
     - Layer 3: Parent-child runs for optimization studies
     """
     
-    def __init__(self, tracking_uri: str = "http://172.25.0.5:5000",
+    def __init__(self, tracking_uri: Optional[str] = None,
                  experiment_name: Optional[str] = None):
         """
         Initialize MLflow logger.
@@ -48,10 +49,14 @@ class MLflowBacktestLogger:
             tracking_uri: MLflow tracking server URI
             experiment_name: Default experiment name
         """
+        # Use environment variable if tracking_uri not provided
+        if tracking_uri is None:
+            tracking_uri = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000')
+
         self.tracking_uri = tracking_uri
         self.experiment_name = experiment_name
         self.mlflow_available = False
-        
+
         # Initialize MLflow client
         try:
             mlflow.set_tracking_uri(tracking_uri)

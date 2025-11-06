@@ -1,4 +1,5 @@
 services:
+services:
   # Backtrader Trading Engine
   backtrader:
     build:
@@ -13,12 +14,13 @@ services:
       - ./results:/app/results
       - ./logs:/app/logs
       - ./scripts:/app/scripts
+      - ./utils:/app/utils
     working_dir: /app
     environment:
       - PYTHONUNBUFFERED=1
       - BACKTRADER_ENGINE_PATH=/app
       - PYTHONPATH=/app
-      - MLFLOW_TRACKING_URI=http://172.25.0.5:5000
+       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - IB_HOST=${IB_HOST}
     networks:
       - trading-network
@@ -129,6 +131,9 @@ services:
       - MLFLOW_ARTIFACTS_DESTINATION=/mlflow/artifacts
       - MLFLOW_SERVER_HOST=0.0.0.0
       - MLFLOW_SERVER_PORT=5000
+      - MLFLOW_SERVER_FILE_STORE=filesystem
+      - MLFLOW_SERVER_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+      - GUNICORN_CMD_ARGS="--bind=0.0.0.0:5000 --workers=1 --threads=1 --worker-class=gthread --access-logfile=- --error-logfile=-"
     command: >
       mlflow server
       --backend-store-uri postgresql://mlflow:mlflow_secure_password@postgres:5432/mlflow
@@ -147,6 +152,63 @@ services:
       timeout: 10s
       retries: 3
 
+  # Redis Queue for Parallel Backtesting
+  redis:
+    image: redis:7-alpine
+    container_name: redis-queue
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - trading-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+   # Parallel Backtest Worker (Scalable)
+   backtest-worker:
+     build:
+       context: .
+       dockerfile: Dockerfile.worker
+     container_name: backtest-worker
+     volumes:
+       - ./strategies:/app/strategies:ro
+       - ./config:/app/config:ro
+       - ./data:/app/data:ro
+       - ./results:/app/results:rw
+       - ./scripts:/app/scripts:ro
+       - ./utils:/app/utils:ro
+      environment:
+        - PYTHONUNBUFFERED=1
+        - REDIS_HOST=redis
+        - REDIS_PORT=6379
+        - MLFLOW_TRACKING_URI=http://172.25.0.4:5000
+        - LOG_LEVEL=INFO
+     networks:
+       - trading-network
+     depends_on:
+       - redis
+       - mlflow
+     deploy:
+       replicas: 1  # Start with 1 worker, scale up as needed
+       resources:
+         limits:
+           cpus: '1.0'
+           memory: 2G
+         reservations:
+           cpus: '0.5'
+           memory: 1G
+     restart: unless-stopped
+     healthcheck:
+       test: ["CMD", "python", "-c", "import redis; r=redis.Redis('redis',6379); r.ping()"]
+       interval: 30s
+       timeout: 10s
+       retries: 3
+       start_period: 10s
+
 networks:
   trading-network:
     driver: bridge
@@ -155,4 +217,6 @@ volumes:
   sqlite-data:
     driver: local
   postgres-data:
+    driver: local
+  redis-data:
     driver: local
