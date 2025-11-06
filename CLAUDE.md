@@ -166,6 +166,134 @@ docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_st
 - **Parameter Constraints**: Strategy-aware validation (SMA fast < slow)
 - **Study Resumption**: Continue interrupted optimization studies
 
+#### Parallel Backtesting (Epic 20)
+
+**Status**: ✅ Implemented - Redis-based distributed parallel backtesting with unlimited horizontal scaling.
+
+```bash
+# Run parallel backtest (single strategy, multiple symbols)
+docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
+  --symbols SPY AAPL MSFT GOOGL AMZN \
+  --strategies strategies/sma_crossover.py \
+  --strategy-params '{"SPY": {"fast_period": 10, "slow_period": 30}, "AAPL": {"fast_period": 10, "slow_period": 30}}'
+
+# Run parallel backtest (multiple strategies, multiple symbols)
+docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
+  --symbols SPY \
+  --strategies strategies/sma_crossover.py strategies/rsi_momentum.py \
+  --strategy-params '{"SPY": {"fast_period": 10, "slow_period": 30}}'
+
+# Run with progress monitoring
+docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
+  --symbols SPY AAPL MSFT \
+  --strategies strategies/sma_crossover.py \
+  --show-progress
+```
+
+**Features**:
+- **Redis Queue**: Job queuing with unlimited horizontal scaling
+- **Docker Workers**: 3+ containerized workers for distributed execution
+- **MLflow Integration**: Automatic experiment tracking for all parallel runs
+- **Batch Processing**: Execute 100+ backtests simultaneously
+- **Results Consolidation**: Unified DataFrame output with performance metrics
+- **Health Monitoring**: Worker health checks and automatic recovery
+
+**Architecture**:
+- **Redis Queue**: Job distribution and result aggregation
+- **Worker Containers**: Isolated execution environments
+- **Results Consolidator**: Unified metrics and performance analysis
+- **MLflow Logger**: Experiment tracking and comparison
+
+#### Walk-Forward Analysis with Parallel Backtesting (Epic 14)
+
+**Status**: ✅ Implemented - Rolling window out-of-sample validation with distributed parallel execution.
+
+```bash
+# Enhanced walk-forward analysis with parallel backtesting
+docker exec backtrader-engine python /app/scripts/walk_forward_analyzer_enhanced.py \
+  --strategy strategies/sma_crossover.py \
+  --symbols SPY AAPL MSFT \
+  --start 2020-01-01 \
+  --end 2024-12-31 \
+  --window-size 12 \
+  --step-size 3 \
+  --optimization-metric sharpe_ratio
+
+# Quick walk-forward test (shorter time period)
+docker exec backtrader-engine python /app/scripts/walk_forward_analyzer_enhanced.py \
+  --strategy strategies/sma_crossover.py \
+  --symbols SPY \
+  --start 2023-01-01 \
+  --end 2024-12-31 \
+  --window-size 6 \
+  --step-size 6
+
+# Custom MLflow project tagging
+docker exec backtrader-engine python /app/scripts/walk_forward_analyzer_enhanced.py \
+  --strategy strategies/my_strategy.py \
+  --symbols SPY \
+  --project Q1_2025 \
+  --asset-class equities \
+  --strategy-family mean_reversion
+```
+
+**Features**:
+- **Rolling Windows**: Configurable in-sample/out-of-sample splits
+- **Parallel Execution**: Each window processed via distributed backtesting
+- **Overfitting Detection**: Performance degradation analysis
+- **MLflow Integration**: Comprehensive experiment tracking
+- **Stability Metrics**: Consistency analysis across time periods
+- **Stationarity Tests**: Statistical validation of performance consistency
+
+**Analysis Output**:
+- Average out-of-sample Sharpe ratio
+- Performance stability score
+- Consistency ratio (positive Sharpe windows)
+- Stationarity test results
+- Window-by-window detailed results
+
+#### Auto-Scaling Workers (Epic 20)
+
+**Status**: ✅ Implemented - Dynamic worker scaling based on queue length monitoring.
+
+```bash
+# Run auto-scaling manager in background
+docker exec -d backtrader-engine python /app/scripts/auto_scaling_manager.py \
+  --min-workers 1 \
+  --max-workers 10 \
+  --scale-up-threshold 5 \
+  --scale-down-threshold 1 \
+  --check-interval 30
+
+# Run with custom settings
+docker exec -d backtrader-engine python /app/scripts/auto_scaling_manager.py \
+  --redis-host redis \
+  --redis-port 6379 \
+  --min-workers 2 \
+  --max-workers 20 \
+  --scale-up-threshold 10 \
+  --scale-down-threshold 2
+```
+
+**Features**:
+- **Queue Monitoring**: Continuous monitoring of Redis job queue length
+- **Dynamic Scaling**: Automatic scale up/down based on workload
+- **Docker Integration**: Manages worker containers via Docker Compose
+- **Configurable Thresholds**: Customizable scale up/down triggers
+- **Health Monitoring**: Worker health checks and automatic recovery
+
+**Scaling Algorithm**:
+- **Scale Up**: When queue length >= threshold, double current workers (up to max)
+- **Scale Down**: When queue length <= threshold and workers > min, halve workers (down to min)
+- **Stable**: Maintain current count when within optimal range
+
+**Benefits**:
+- **Cost Efficiency**: Only run workers when needed
+- **Performance**: Scale up during high workload periods
+- **Resource Management**: Prevent over-provisioning during low activity
+
+
+
 #### Project Management (Epic 17)
 
 **Status**: ✅ Implemented - Intelligent experiment organization and querying.

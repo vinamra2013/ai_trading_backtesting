@@ -2,7 +2,7 @@
 
 **Epic Description:** Build a scalable distributed backtesting system using Redis queues and Docker workers to efficiently test multiple symbol-strategy combinations, achieving sub-30-minute execution for 400+ backtests.
 
-**Time Estimate:** 24 hours → **Actual: 32 hours** (including Redis migration and MLflow fixes)
+**Time Estimate:** 24 hours → **Actual: 42 hours** (including walk-forward integration, auto-scaling, and enhancements)
 **Priority:** P1 (High - Critical for efficient strategy testing)
 **Status:** ✅ **COMPLETED** - Production ready distributed system
 **Dependencies:** Backtest runner (scripts/run_backtest.py), MLflow integration, Docker environment
@@ -26,6 +26,9 @@ Enable scalable quantitative research by parallelizing backtest execution across
 - [x] Comprehensive MLflow logging for all runs (✅ **Achieved**: 32 runs across 8 experiments)
 - [x] Resource utilization <80% CPU/memory during execution (✅ **Achieved**: Efficient Docker containerization)
 - [x] Clean error handling with detailed failure reporting (✅ **Achieved**: Comprehensive error logging)
+- [x] Walk-forward analysis integration with parallel backtesting (✅ **Achieved**: Enhanced analyzer with distributed execution)
+- [x] Auto-scaling worker management (✅ **Achieved**: Dynamic scaling based on queue length)
+- [x] Job prioritization system (✅ **Achieved**: Redis sorted sets for priority queuing)
 
 ---
 
@@ -64,6 +67,8 @@ Enable scalable quantitative research by parallelizing backtest execution across
 #### New Components
 - [x] `scripts/parallel_backtest.py` - Redis-based orchestration engine with job queue management
 - [x] `scripts/backtest_worker.py` - Docker container worker for distributed execution
+- [x] `scripts/walk_forward_analyzer_enhanced.py` - Walk-forward analysis with parallel backtesting integration
+- [x] `scripts/auto_scaling_manager.py` - Dynamic worker scaling based on queue length
 - [x] `utils/results_consolidator.py` - Results aggregation and DataFrame consolidation
 - [x] `Dockerfile.worker` - Docker image for backtest workers
 - [x] Redis queue infrastructure in `docker-compose.yml`
@@ -274,6 +279,9 @@ def execute_backtest_worker(job_data: Dict) -> Dict:
 - **✅ 32 MLflow runs** logged across 8 experiments
 - **✅ 67% success rate** (16/24, failures due to data availability)
 - **✅ Production deployment** ready with Docker Compose
+- **✅ Walk-forward analysis** with 5/5 windows successful (Sharpe: 0.960)
+- **✅ Auto-scaling** dynamic worker management implemented
+- **✅ Job prioritization** via Redis sorted sets operational
 
 ### Architecture Evolution
 
@@ -391,3 +399,67 @@ def execute_backtest_worker(job_data: Dict) -> Dict:
 **Notes:**
 - Target: <30 minutes for 400 backtests on daily data
 - Include hardware recommendations in documentation
+
+---
+
+### [x] US-20.6: Walk-Forward Analysis Integration
+**As a quant researcher, I need walk-forward analysis that leverages parallel backtesting**
+
+**Status:** ✅ **COMPLETED**
+**Estimate:** 4 hours → **Actual: 6 hours** (syntax fixes + testing)
+**Priority:** P1
+
+**Acceptance Criteria:**
+- [x] Enhanced walk-forward analyzer using parallel backtesting infrastructure
+- [x] Rolling window analysis with configurable in-sample/out-of-sample splits
+- [x] MLflow integration for walk-forward experiment tracking
+- [x] Performance stability metrics and overfitting detection
+- [x] Command-line interface with strategy path support
+- [x] Python script: scripts/walk_forward_analyzer_enhanced.py
+
+**Notes:**
+- Integrates with existing parallel backtesting Redis queue
+- Supports custom MLflow project tagging and asset class categorization
+- Tested successfully with 5 windows (100% success rate)
+
+---
+
+### [x] US-20.7: Auto-Scaling Worker Management
+**As a system administrator, I need automatic scaling of backtest workers based on workload**
+
+**Status:** ✅ **COMPLETED**
+**Estimate:** 3 hours → **Actual: 4 hours**
+**Priority:** P2
+
+**Acceptance Criteria:**
+- [x] Queue length monitoring with configurable thresholds
+- [x] Dynamic worker scaling (up/down) based on demand
+- [x] Docker Compose integration for container management
+- [x] Configurable min/max worker limits and scaling parameters
+- [x] Background service operation with health monitoring
+- [x] Python script: scripts/auto_scaling_manager.py
+
+**Notes:**
+- Scale up when queue > threshold, scale down when queue < threshold
+- Maintains optimal worker count for current workload
+- Prevents resource waste during low activity periods
+
+---
+
+### [x] US-20.8: Job Prioritization System
+**As a quant researcher, I need important backtests to be processed before less critical ones**
+
+**Status:** ✅ **COMPLETED**
+**Estimate:** 2 hours → **Actual: 1 hour** (already implemented)
+**Priority:** P2
+
+**Acceptance Criteria:**
+- [x] Redis sorted sets for priority-based job queuing
+- [x] Higher priority numbers processed first
+- [x] Priority parameter support in parallel backtest API
+- [x] Atomic job retrieval with BZPOPMAX for consistency
+
+**Notes:**
+- Uses negative priority in Redis sorted set (higher numbers = higher priority)
+- Integrated into existing parallel backtest orchestration
+- Supports real-time priority adjustments
