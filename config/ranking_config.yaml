@@ -1,0 +1,93 @@
+# Strategy Ranking & Portfolio Optimization Configuration
+# Epic 21: Strategy Ranking & Portfolio Optimizer
+
+# Multi-criteria scoring weights (must sum to 100)
+scoring:
+  weights:
+    sharpe_ratio: 40      # Risk-adjusted returns (40%)
+    consistency: 20       # Rolling return stability (20%)
+    drawdown_control: 20  # Maximum drawdown management (20%)
+    trade_frequency: 10   # Trading activity (10%)
+    capital_efficiency: 10 # Return per dollar deployed (10%)
+
+  # Scoring parameters
+  consistency:
+    window_days: 30       # Rolling window for consistency calculation
+    min_periods: 10       # Minimum periods for valid consistency score
+
+  drawdown_control:
+    max_drawdown_weight: 1.0  # Weight for max drawdown in scoring
+
+  trade_frequency:
+    optimal_trades_per_month: 20  # Target trading frequency
+    frequency_weight: 1.0         # Weight for frequency scoring
+
+  capital_efficiency:
+    efficiency_weight: 1.0        # Weight for capital efficiency scoring
+
+# Correlation analysis settings
+correlation:
+  threshold: 0.7          # Correlation coefficient threshold for filtering
+  method: pearson         # Correlation method: pearson, spearman, kendall
+  min_periods: 30         # Minimum overlapping periods for correlation
+  greedy_selection: true  # Use greedy algorithm for diversity maximization
+
+# Portfolio optimization settings
+portfolio:
+  capital: 1000           # Total portfolio capital ($)
+  max_positions: 3        # Maximum concurrent positions
+  min_allocation: 0.1     # Minimum allocation per position (10%)
+  max_allocation: 0.5     # Maximum allocation per position (50%)
+
+  # Allocation methods
+  methods:
+    equal_weight:
+      enabled: true
+      name: "Equal Weight"
+      description: "Equal capital allocation to all selected strategies"
+
+    volatility_adjusted:
+      enabled: true
+      name: "Volatility Adjusted"
+      description: "Inverse volatility weighting for risk parity"
+      target_volatility: 0.15  # Target portfolio volatility (15%)
+
+    risk_parity:
+      enabled: true
+      name: "Risk Parity"
+      description: "Equal risk contribution from each strategy"
+      risk_measure: "volatility"  # volatility, var, cvar
+
+  # Transaction costs (basis points)
+  transaction_costs:
+    commission_bps: 5      # 5 bps commission
+    spread_bps: 2          # 2 bps spread
+    impact_bps: 1          # 1 bps market impact
+
+# Leaderboard settings
+leaderboard:
+  top_n_strategies: 15    # Number of top strategies to select
+  min_score_threshold: 50 # Minimum composite score (0-100)
+  export_formats: ["csv", "json", "parquet"]
+  include_metadata: true  # Include strategy metadata in exports
+
+# Performance settings
+performance:
+  parallel_processing: true
+  max_workers: 4
+  cache_results: true
+  cache_dir: "cache/ranking"
+  memory_limit_mb: 1024
+
+# Output settings
+output:
+  results_dir: "results/ranking"
+  reports_dir: "results/reports"
+  charts_dir: "results/charts"
+  export_timestamped: true
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/ranking_engine.log"
