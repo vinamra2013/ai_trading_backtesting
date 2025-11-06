@@ -66,7 +66,6 @@ class BaseStrategy(bt.Strategy):
         self.trade_count = 0
 
         logger.info(f"{self.__class__.__name__} initialized")
-        self.log(f"Strategy started with ${self.broker.getvalue():,.2f}")
 
     def log(self, txt, dt=None, level='INFO'):
         """
@@ -80,8 +79,14 @@ class BaseStrategy(bt.Strategy):
         if not self.params.printlog:
             return
 
-        dt = dt or self.datas[0].datetime.date(0)
-        timestamp = dt.isoformat()
+        # Check if data is available
+        if len(self.datas) > 0 and len(self.datas[0]) > 0:
+            dt = dt or self.datas[0].datetime.date(0)
+            timestamp = dt.isoformat()
+        else:
+            # Fallback to current datetime if no data available yet
+            from datetime import datetime
+            timestamp = datetime.now().isoformat()
 
         if level == 'INFO':
             logger.info(f'{timestamp} | {txt}')
@@ -408,7 +413,7 @@ class BaseStrategy(bt.Strategy):
 
     def start(self):
         """Called when strategy starts (before any data)."""
-        self.log(f"Strategy starting...")
+        self.log(f"Strategy starting with ${self.broker.getvalue():,.2f}")
 
     def stop(self):
         """Called when strategy ends."""

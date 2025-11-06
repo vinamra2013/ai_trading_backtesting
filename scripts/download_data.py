@@ -83,7 +83,49 @@ class DataDownloader:
         self.output_dir = Path(data_folder) / 'csv'
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Track data farm connection warnings
+        self.data_farm_warnings = []
+        self._restart_attempted = False
+
         logger.info(f"DataDownloader initialized. Output dir: {self.output_dir}")
+
+    def _check_data_farm_connection(self) -> bool:
+        """
+        Check if data farm connections are working by attempting a simple market data request
+
+        Returns:
+            bool: True if data farm connections appear healthy
+        """
+        if not self.ib_manager or not self.ib_manager.ib:
+            return False
+
+        try:
+            # Try to request market data for a simple contract - this will fail if data farms are broken
+            contract = Stock('SPY', 'SMART', 'USD')
+            self.ib_manager.ib.qualifyContracts(contract)
+
+            # Request a small amount of historical data to test data farm connectivity
+            bars = self.ib_manager.ib.reqHistoricalData(
+                contract,
+                endDateTime='',  # Empty string means current time
+                durationStr='1 D',  # 1 day
+                barSizeSetting='1 day',
+                whatToShow='TRADES',
+                useRTH=True,
+                timeout=10  # Short timeout
+            )
+
+            # If we get data back, data farms are working
+            if bars and len(bars) > 0:
+                logger.info("✅ Data farm connections verified")
+                return True
+            else:
+                logger.warning("⚠️  No data returned from data farm test")
+                return False
+
+        except Exception as e:
+            logger.warning(f"⚠️  Data farm connection check failed: {e}")
+            return False
 
     def connect(self, host: Optional[str] = None) -> bool:
         """
@@ -98,10 +140,16 @@ class DataDownloader:
         try:
             # Use localhost if running outside Docker, ib-gateway if inside
             if host is None:
-                host_env = os.getenv('IB_HOST')
-                host = host_env if host_env is not None else 'localhost'
+                host = os.getenv('IB_HOST', 'ib-gateway')
+
             self.ib_manager = IBConnectionManager(host=host, readonly=True)
-            return self.ib_manager.connect()
+            success = self.ib_manager.connect()
+
+            if success:
+                logger.info("✅ Connected to IB Gateway")
+
+            return success
+
         except Exception as e:
             logger.error(f"Failed to connect to IB: {e}")
             return False
@@ -207,6 +255,21 @@ class DataDownloader:
             logger.error("Not connected to IB. Call connect() first.")
             return False
 
+        # Check data farm connections immediately after connecting
+        logger.info("Checking data farm connections...")
+        if not self._check_data_farm_connection():
+            logger.warning("🔄 Data farm connections appear broken - restarting IB Gateway...")
+            if self.check_and_restart_ib_gateway():
+                # Reconnect after restart
+                if self.connect(host=os.getenv('IB_HOST', 'localhost')):
+                    logger.info("♻️  Reconnected after IB Gateway restart")
+                else:
+                    logger.error("❌ Failed to reconnect after restart")
+                    return False
+            else:
+                logger.error("❌ Failed to restart IB Gateway")
+                return False
+
         # Validate resolution
         if resolution not in self.RESOLUTION_MAP:
             logger.error(
@@ -253,23 +316,10 @@ class DataDownloader:
                 import time
                 time.sleep(1)
 
-                # Check if there have been recent data farm warnings by examining the IB connection
-                data_farm_broken = False
-                try:
-                    # Check the IB connection for any error state or warnings
-                    if hasattr(self.ib_manager.ib, 'client') and self.ib_manager.ib.client:
-                        # Check if the client has any error messages
-                        if hasattr(self.ib_manager.ib.client, 'errors') and self.ib_manager.ib.client.errors:
-                            recent_errors = [str(e) for e in self.ib_manager.ib.client.errors[-5:]]
-                            for error in recent_errors:
-                                if "connection is broken" in error.lower() and any(code in error for code in ['2103', '2105', '2157']):
-                                    logger.warning(f"⚠️  Data farm connection broken detected in errors: {error}")
-                                    data_farm_broken = True
-                                    break
-                except Exception as e:
-                    logger.debug(f"Error checking for data farm warnings: {e}")
+                # Check if data farm connections are working
+                data_farm_broken = not self._check_data_farm_connection()
 
-                if data_farm_broken and not hasattr(self, '_restart_attempted'):
+                if data_farm_broken and not self._restart_attempted:
                     logger.warning("🔄 Data farm connection broken - restarting IB Gateway...")
                     self._restart_attempted = True
                     if self.check_and_restart_ib_gateway():
