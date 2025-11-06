@@ -16,7 +16,7 @@ Algorithmic trading platform built on **Backtrader** (open-source) with Interact
 **CRITICAL**: This project uses a Python virtual environment. ALWAYS activate it before running Python commands:
 
 ```bash
-source venv/bin/activate
+source venv/bin/activate.fish
 ```
 
 All Python commands (pip, python scripts) MUST run within the virtual environment.
@@ -223,13 +223,86 @@ The script:
 - Resolutions: Daily, Hour, Minute, Second
 - Markets: USA (default)
 
+### Symbol Discovery Engine (Epic 18)
+
+**Status**: ✅ Implemented - Autonomous symbol discovery using IB API scanner functionality.
+
+Use [scripts/symbol_discovery.py](scripts/symbol_discovery.py) for autonomous symbol discovery:
+
+```bash
+# Basic usage - discover high volume stocks
+source venv/bin/activate
+python scripts/symbol_discovery.py --scanner high_volume --output csv
+
+# Advanced usage with filters
+python scripts/symbol_discovery.py \
+  --scanner volatility_leaders \
+  --min-volume 2000000 \
+  --atr-threshold 1.5 \
+  --min-price 10.0 \
+  --max-price 200.0 \
+  --output json
+
+# Dry run to see configuration
+python scripts/symbol_discovery.py --scanner top_gainers --dry-run
+
+# View discovery statistics
+python scripts/symbol_discovery.py --stats
+
+# Skip database operations (file output only)
+python scripts/symbol_discovery.py --scanner most_active_stocks --no-db --output csv
+```
+
+#### Scanner Types
+
+- `high_volume`: High volume stocks ($2M+ avg daily volume)
+- `top_gainers`: Top percentage gainers (daily)
+- `top_losers`: Top percentage losers (daily)
+- `most_active_stocks`: Most active stocks by volume
+- `most_active_etfs`: Most active ETFs by volume
+- `volatility_leaders`: Highest volatility (ATR-based)
+
+#### Filter Options
+
+- `--min-volume`: Minimum average daily volume
+- `--atr-threshold`: Minimum ATR (volatility) threshold
+- `--min-price`: Minimum stock price
+- `--max-price`: Maximum stock price
+- `--exchanges`: Allowed exchanges (NYSE,NASDAQ,ARCA)
+
+#### Output Formats
+
+- `--output csv`: Comma-separated values (default)
+- `--output json`: JSON array format
+- `--output both`: Generate both CSV and JSON
+
+#### Features
+
+- **IB Scanner API Integration**: Direct connection to Interactive Brokers scanner
+- **Intelligent Filtering**: Liquidity, volatility, price range, exchange validation
+- **ATR Calculation**: Real-time volatility analysis using historical data
+- **PostgreSQL Storage**: Historical symbol tracking and performance data
+- **CLI Flexibility**: Full parameter override capability
+- **Comprehensive Logging**: Detailed execution logs and error handling
+
+#### Output Files
+
+Results saved to `data/discovered_symbols/` with timestamped filenames:
+```
+data/discovered_symbols/high_volume_20251105_174142.csv
+data/discovered_symbols/high_volume_20251105_174142.json
+```
+
+CSV format includes: symbol, exchange, sector, avg_volume, atr, price, pct_change, market_cap, volume, discovery_timestamp
+
 ### Data Storage Structure
 
 ```
 data/
 ├── raw/        # Downloaded market data
 ├── processed/  # Cleaned/transformed data
-└── sqlite/     # Trade history database
+├── sqlite/     # Trade history database
+└── discovered_symbols/  # Symbol discovery outputs (Epic 18)
 ```
 
 ## Database Optimization (Epic 17)
@@ -445,6 +518,14 @@ Critical config files in [config/](config/):
   - IB connection framework via ib_insync
   - Data pipeline operational
   - Project structure established
+
+- ✅ **Epic 18**: Symbol Discovery Engine (100%)
+  - IB Scanner API integration
+  - 6 scanner types (high_volume, top_gainers, volatility_leaders, etc.)
+  - Intelligent filtering (liquidity, volatility, price range, exchange)
+  - PostgreSQL database storage for historical tracking
+  - CLI interface with filter overrides
+  - CSV/JSON output formats
 
 **Partially Completed Epics**:
 - 🔄 **Epic 12**: Core Backtesting Engine (87.5%)
@@ -706,6 +787,7 @@ python scripts/run_backtest.py --strategy strategies.my_strategy.MyStrategy --sy
 **Quick Reference Card**:
 - Start services: `./scripts/start.sh`
 - Download data: `python scripts/download_data.py --symbols SPY --start 2020-01-01 --end 2024-12-31`
+- Symbol discovery: `python scripts/symbol_discovery.py --scanner high_volume --output csv`
 - Run backtest: `python scripts/run_backtest.py --strategy strategies.sma_crossover.SMACrossover --symbols SPY --start 2020-01-01 --end 2024-12-31`
 - Live trading: `./scripts/start_live_trading.sh`
 - Emergency stop: `./scripts/emergency_stop.sh`

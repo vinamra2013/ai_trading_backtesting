@@ -15,6 +15,7 @@ import os
 import time
 import logging
 import asyncio
+import subprocess
 from typing import Optional
 from datetime import datetime
 from ib_insync import IB, util
@@ -39,7 +40,7 @@ class IBConnectionManager:
     def __init__(
         self,
         host: str = 'ib-gateway',
-        port: int = None,
+        port: Optional[int] = None,
         client_id: int = 1,
         max_retries: int = 3,
         initial_backoff: float = 1.0,
@@ -60,7 +61,7 @@ class IBConnectionManager:
             readonly: Read-only API access (default: False)
         """
         self.host = host
-        self.port = port or int(os.getenv('IB_GATEWAY_PORT', '8888'))
+        self.port = port if port is not None else int(os.getenv('IB_GATEWAY_PORT', '8888'))  # type: ignore
         self.client_id = client_id
         self.max_retries = max_retries
         self.initial_backoff = initial_backoff
@@ -86,57 +87,135 @@ class IBConnectionManager:
         """
         logger.info(f"Attempting to connect to IB Gateway at {self.host}:{self.port}")
 
-        for attempt in range(self.max_retries):
-            try:
-                # Calculate backoff time with exponential increase
-                if attempt > 0:
-                    backoff_time = self.initial_backoff * (2 ** (attempt - 1))
-                    logger.info(f"Retry {attempt}/{self.max_retries} after {backoff_time}s")
-                    time.sleep(backoff_time)
+        # Try different client IDs if the first one fails
+        client_ids_to_try = list(range(1, 11))  # Try client IDs 1-10
 
-                logger.info(f"Connection attempt {attempt + 1}/{self.max_retries}")
+        for client_id in client_ids_to_try:
+            attempt_desc = f"client_id={client_id}"
+
+            try:
+                logger.info(f"Connection {attempt_desc}")
 
                 # Connect using ib_insync
                 self.ib.connect(
                     host=self.host,
                     port=self.port,
-                    clientId=self.client_id,
+                    clientId=client_id,
                     readonly=self.readonly,
-                    timeout=20
+                    timeout=10  # Shorter timeout
                 )
 
+                # Wait a moment to see if connection stays alive
+                time.sleep(2)
+
                 if self.ib.isConnected():
+                    # Wait a moment for any data farm warnings to appear
+                    time.sleep(2)
+
+                    # Check for data farm connection issues
+                    data_farm_broken = False
+                    try:
+                        if hasattr(self.ib, 'client') and self.ib.client:
+                            # Check client errors for data farm warnings
+                            if hasattr(self.ib.client, 'errors') and self.ib.client.errors:
+                                for error in self.ib.client.errors[-10:]:  # Check last 10 errors
+                                    error_str = str(error).lower()
+                                    if "connection is broken" in error_str and any(code in error_str for code in ['2103', '2105', '2157']):
+                                        logger.warning(f"⚠️  Data farm connection broken detected: {error}")
+                                        data_farm_broken = True
+                                        break
+                    except Exception as e:
+                        logger.debug(f"Error checking data farm status: {e}")
+
+                    if data_farm_broken:
+                        logger.warning("🔄 Data farm connection broken - restarting IB Gateway...")
+                        try:
+                            result = subprocess.run(
+                                ['docker', 'compose', 'restart', 'ib-gateway'],
+                                capture_output=True,
+                                text=True,
+                                timeout=60,
+                                cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                            )
+                            if result.returncode == 0:
+                                logger.info("✅ IB Gateway restarted, waiting 30 seconds...")
+                                time.sleep(30)
+                                # Try connecting again (will use next client ID)
+                                continue
+                            else:
+                                logger.error(f"❌ Failed to restart IB Gateway: {result.stderr}")
+                                return False
+                        except Exception as e:
+                            logger.error(f"❌ Error restarting IB Gateway: {e}")
+                            return False
+
                     self.is_connected = True
                     self.retry_count = 0
                     self.last_health_check = datetime.now()
+                    # Update the actual client ID used
+                    self.client_id = client_id
 
                     logger.info(
                         f"✅ Successfully connected to IB Gateway "
-                        f"(serverVersion={self.ib.client.serverVersion()})"
+                        f"(serverVersion={self.ib.client.serverVersion()}, clientId={client_id})"
                     )
                     return True
                 else:
-                    logger.warning(f"Connection attempt {attempt + 1} failed")
-                    self.retry_count = attempt + 1
+                    logger.warning(f"Connection {attempt_desc} failed - trying next client ID")
 
             except ConnectionRefusedError:
                 logger.error(
                     f"Connection refused by IB Gateway at {self.host}:{self.port}. "
                     f"Is IB Gateway running?"
                 )
-                self.retry_count = attempt + 1
+                # For connection refused, restart container and try again
+                if self._restart_gateway_on_connection_refused():
+                    # Try the same client ID again after restart
+                    continue
+                else:
+                    return False
 
             except Exception as e:
-                logger.error(
-                    f"Connection error on attempt {attempt + 1}: {type(e).__name__}: {e}"
-                )
-                self.retry_count = attempt + 1
+                error_msg = str(e).lower()
+                logger.warning(f"Connection {attempt_desc} failed: {type(e).__name__}: {e} - trying next client ID")
 
-        logger.error(
-            f"❌ Failed to connect after {self.max_retries} attempts"
-        )
-        self.is_connected = False
+        logger.error(f"❌ Failed to connect after trying {len(client_ids_to_try)} client IDs")
         return False
+
+        logger.error(f"❌ Failed to connect after trying {len(client_ids_to_try)} client IDs with {self.max_retries} attempts each")
+        return False
+
+    def _restart_gateway_on_connection_refused(self) -> bool:
+        """
+        Restart IB Gateway when connection is refused
+
+        Returns:
+            bool: True if restart was successful
+        """
+        try:
+            logger.warning("🔄 Connection refused - restarting IB Gateway container...")
+            result = subprocess.run(
+                ['docker', 'compose', 'restart', 'ib-gateway'],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # Project root
+            )
+
+            if result.returncode == 0:
+                logger.info("✅ IB Gateway restarted successfully, waiting 30 seconds for initialization...")
+                time.sleep(30)
+                return True
+            else:
+                logger.error(f"❌ Failed to restart IB Gateway: {result.stderr}")
+                return False
+
+        except subprocess.TimeoutExpired:
+            logger.error("❌ IB Gateway restart timed out")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error restarting IB Gateway: {e}")
+            return False
 
     def disconnect(self):
         """Gracefully disconnect from IB Gateway"""

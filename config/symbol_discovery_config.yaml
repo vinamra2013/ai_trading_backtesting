@@ -1,0 +1,209 @@
+# Symbol Discovery Engine Configuration
+# Epic 18: Symbol Discovery Engine
+# US-18.2: Market Data Scanner Types
+# US-18.3: Filtering and Validation Logic
+
+# Scanner Types Configuration
+scanners:
+  # Top percentage gainers/losers (daily)
+  top_gainers:
+    type: "TOP_PERC_GAIN"
+    scan_code: "TOP_PERC_GAIN"
+    description: "Top percentage gainers"
+    parameters:
+      number_of_rows: 50
+      above_price: 5.0
+      below_price: 500.0
+      above_volume: 1000000
+
+  top_losers:
+    type: "TOP_PERC_LOSE"
+    scan_code: "TOP_PERC_LOSE"
+    description: "Top percentage losers"
+    parameters:
+      number_of_rows: 50
+      above_price: 5.0
+      below_price: 500.0
+      above_volume: 1000000
+
+  # High volume stocks
+  high_volume:
+    type: "HIGH_VOLUMNE"
+    scan_code: "MOST_ACTIVE"
+    description: "High volume stocks"
+    parameters:
+      number_of_rows: 100
+      above_price: 5.0
+      below_price: 500.0
+      above_volume: 2000000  # $2M+ avg daily volume
+
+  # Most active contracts
+  most_active_stocks:
+    type: "MOST_ACTIVE"
+    scan_code: "MOST_ACTIVE"
+    description: "Most active stocks"
+    parameters:
+      number_of_rows: 100
+      above_price: 5.0
+      below_price: 500.0
+      above_volume: 1000000
+
+  most_active_etfs:
+    type: "MOST_ACTIVE"
+    scan_code: "MOST_ACTIVE"
+    description: "Most active ETFs"
+    parameters:
+      number_of_rows: 50
+      instrument_type: "ETF"
+      above_price: 5.0
+      below_price: 500.0
+      above_volume: 500000
+
+  # Volatility leaders (ATR-based)
+  volatility_leaders:
+    type: "HOT_BY_VOLUME"
+    scan_code: "HOT_BY_VOLUME"
+    description: "Volatility leaders"
+    parameters:
+      number_of_rows: 100
+      above_price: 5.0
+      below_price: 500.0
+      above_volume: 1000000
+
+# Filtering Configuration
+filters:
+  # Liquidity filters
+  liquidity:
+    min_avg_volume: 1000000  # $1M minimum average daily volume
+    min_avg_volume_pct: 0.5  # 50% of average volume threshold
+
+  # Volatility filters (ATR-based)
+  volatility:
+    min_atr: 0.5  # Minimum ATR > 0.5%
+    max_atr: 20.0  # Maximum ATR < 20%
+    atr_period: 14  # ATR calculation period
+
+  # Price range filters
+  price_range:
+    min_price: 5.0   # Avoid penny stocks
+    max_price: 500.0 # Avoid extreme prices
+
+  # Exchange filters
+  exchanges:
+    allowed:
+      - "NYSE"
+      - "NASDAQ"
+      - "ARCA"  # ETFs
+    excluded:
+      - "OTC"
+      - "PINK"
+      - "GREY"
+
+  # Sector/Industry filters (optional)
+  sectors:
+    allowed: []  # Empty means all sectors allowed
+    excluded:
+      - "Financial Services"  # Can be too volatile
+      - "Real Estate"         # Can be illiquid
+
+# Data Collection Configuration
+data_collection:
+  # Historical data period for ATR calculation
+  historical_period_days: 30
+
+  # Market data sources
+  data_sources:
+    primary: "IBKR"
+    fallback: "YAHOO"  # If IBKR data unavailable
+
+  # Rate limiting
+  rate_limiting:
+    max_requests_per_minute: 30
+    request_delay_seconds: 2.0
+
+# Output Configuration
+output:
+  # CSV output settings
+  csv:
+    delimiter: ","
+    quotechar: '"'
+    include_headers: true
+    date_format: "%Y-%m-%d %H:%M:%S"
+
+  # JSON output settings
+  json:
+    indent: 2
+    ensure_ascii: false
+
+  # Required columns for all outputs
+  columns:
+    - "symbol"
+    - "exchange"
+    - "sector"
+    - "avg_volume"
+    - "atr"
+    - "price"
+    - "pct_change"
+    - "market_cap"
+    - "volume"
+    - "discovery_timestamp"
+
+# Database Configuration
+database:
+  # PostgreSQL connection settings
+  host: "postgres"
+  port: 5432
+  database: "symbol_discovery"
+  user: "mlflow"  # Reuse existing user
+  password: "mlflow_secure_password"
+  ssl_mode: "disable"
+
+  # Connection pool settings
+  pool:
+    min_connections: 1
+    max_connections: 10
+    connection_timeout: 30
+
+  # Schema settings
+  schema: "public"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/symbol_discovery.log"
+
+  # Performance logging
+  performance:
+    enabled: true
+    metrics_interval_seconds: 60
+
+# Error Handling Configuration
+error_handling:
+  # Retry configuration
+  retry:
+    max_attempts: 3
+    initial_delay: 1.0
+    backoff_factor: 2.0
+    max_delay: 60.0
+
+  # Circuit breaker
+  circuit_breaker:
+    failure_threshold: 5
+    recovery_timeout: 300  # 5 minutes
+
+  # Rate limit handling
+  rate_limit:
+    wait_time_seconds: 60
+    max_wait_attempts: 3
+
+# Validation Configuration
+validation:
+  # Data freshness requirements
+  data_freshness:
+    max_age_hours: 24  # Symbols older than 24 hours need refresh
+
+  # Quality checks
+  quality_checks:
+    min_symbols_required: 10  # Minimum symbols per scan
+    max_empty_scans: 3         # Max consecutive empty scans before alert

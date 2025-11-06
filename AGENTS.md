@@ -2,14 +2,19 @@
 
 ## Build/Lint/Test Commands
 
-**Environment**: Always activate venv first: `source venv/bin/activate`
+**CRITICAL**: This project uses a Python virtual environment. ALWAYS activate it before running Python commands:
+
+**Environment**: Always activate venv first: `source venv/bin/activate.fish`
 
 **Testing**: No formal test framework - use manual validation:
-- Single backtest: `python scripts/run_backtest.py --strategy <path> --start YYYY-MM-DD --end YYYY-MM-DD --symbols SPY`
-- Data validation: `python scripts/data_quality_check.py`
-- Health checks: `python scripts/health_endpoint.py`
-- IB connection test: `python scripts/ib_connection.py`
-- Download data: `python scripts/download_data.py --symbols SPY --start 2024-01-01 --end 2024-12-31`
+- Single backtest: `source venv/bin/activate.fish && python scripts/run_backtest.py --strategy <path> --start YYYY-MM-DD --end YYYY-MM-DD --symbols SPY`
+- Data validation: `source venv/bin/activate.fish && python scripts/data_quality_check.py`
+- Health checks: `source venv/bin/activate.fish && python scripts/health_endpoint.py`
+- IB connection test: `source venv/bin/activate.fish && python scripts/ib_connection.py`
+- Download data: `source venv/bin/activate.fish && python scripts/download_data.py --symbols SPY --start 2024-01-01 --end 2024-12-31`
+- Symbol discovery: `source venv/bin/activate.fish && python scripts/symbol_discovery.py --scanner high_volume --output csv`
+- Discovery stats: `source venv/bin/activate.fish && python scripts/symbol_discovery.py --stats`
+- Run python Scripts in docker: `docker exec backtrader-engine python /app/scripts/<name>.py`
 
 **Build/Deploy**:
 - Start platform: `./scripts/start.sh`

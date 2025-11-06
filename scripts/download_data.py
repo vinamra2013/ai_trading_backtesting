@@ -85,7 +85,7 @@ class DataDownloader:
 
         logger.info(f"DataDownloader initialized. Output dir: {self.output_dir}")
 
-    def connect(self, host: str = None) -> bool:
+    def connect(self, host: Optional[str] = None) -> bool:
         """
         Connect to IB Gateway
 
@@ -98,7 +98,8 @@ class DataDownloader:
         try:
             # Use localhost if running outside Docker, ib-gateway if inside
             if host is None:
-                host = os.getenv('IB_HOST', 'localhost')
+                host_env = os.getenv('IB_HOST')
+                host = host_env if host_env is not None else 'localhost'
             self.ib_manager = IBConnectionManager(host=host, readonly=True)
             return self.ib_manager.connect()
         except Exception as e:
@@ -120,35 +121,59 @@ class DataDownloader:
         if not self.ib_manager or not self.ib_manager.ib:
             return False
 
-        # Check for data farm connection issues in IB warnings
-        # Warning codes: 2103 (market data broken), 2105 (HMDS broken), 2157 (sec-def broken)
-        warnings = []
-        if hasattr(self.ib_manager.ib, '_events'):
-            # Check recent warnings for data farm issues
-            # IB Gateway logs these as warnings with specific codes
-            pass  # Warning tracking happens at ib_insync level
-
-        # Simple check: if we've been connected for >60s and seeing repeated timeouts,
-        # trigger restart via Docker Compose
+        # Check if connection is actually broken
         try:
-            logger.warning("⚠️  Detected data farm connection issues - restarting IB Gateway...")
+            # Test connection by checking if we can get account info
+            account = self.ib_manager.ib.accountSummary()
+            if not account:
+                logger.warning("⚠️  IB connection appears broken - no account summary available")
+                return self._restart_gateway()
+        except Exception as e:
+            logger.warning(f"⚠️  IB connection test failed: {e}")
+            return self._restart_gateway()
+
+        # Check for data farm connection issues by looking at connection state
+        try:
+            # Check if IB is connected and has active data connections
+            if not self.ib_manager.ib.isConnected():
+                logger.warning("⚠️  IB not connected - restarting gateway...")
+                return self._restart_gateway()
+        except Exception as e:
+            logger.warning(f"⚠️  Error checking IB connection state: {e}")
+            return self._restart_gateway()
+
+        return False
+
+    def _restart_gateway(self) -> bool:
+        """
+        Internal method to restart the IB Gateway via Docker Compose
+
+        Returns:
+            bool: True if restart was successful
+        """
+        try:
+            logger.warning("🔄 Restarting IB Gateway container...")
             result = subprocess.run(
                 ['docker', 'compose', 'restart', 'ib-gateway'],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=60,
+                cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Run from project root
             )
 
             if result.returncode == 0:
-                logger.info("✅ IB Gateway restarted successfully")
+                logger.info("✅ IB Gateway restarted successfully, waiting 30 seconds for initialization...")
                 # Wait for gateway to initialize
                 import time
-                time.sleep(15)
+                time.sleep(30)
                 return True
             else:
                 logger.error(f"❌ Failed to restart IB Gateway: {result.stderr}")
                 return False
 
+        except subprocess.TimeoutExpired:
+            logger.error("❌ IB Gateway restart timed out")
+            return False
         except Exception as e:
             logger.error(f"❌ Error restarting IB Gateway: {e}")
             return False
@@ -223,6 +248,40 @@ class DataDownloader:
                 contract = qualified[0]
                 logger.info(f"✅ Contract qualified: {contract.localSymbol}")
 
+                # Check for data farm warnings before making request
+                # Wait a moment for any warnings to appear
+                import time
+                time.sleep(1)
+
+                # Check if there have been recent data farm warnings by examining the IB connection
+                data_farm_broken = False
+                try:
+                    # Check the IB connection for any error state or warnings
+                    if hasattr(self.ib_manager.ib, 'client') and self.ib_manager.ib.client:
+                        # Check if the client has any error messages
+                        if hasattr(self.ib_manager.ib.client, 'errors') and self.ib_manager.ib.client.errors:
+                            recent_errors = [str(e) for e in self.ib_manager.ib.client.errors[-5:]]
+                            for error in recent_errors:
+                                if "connection is broken" in error.lower() and any(code in error for code in ['2103', '2105', '2157']):
+                                    logger.warning(f"⚠️  Data farm connection broken detected in errors: {error}")
+                                    data_farm_broken = True
+                                    break
+                except Exception as e:
+                    logger.debug(f"Error checking for data farm warnings: {e}")
+
+                if data_farm_broken and not hasattr(self, '_restart_attempted'):
+                    logger.warning("🔄 Data farm connection broken - restarting IB Gateway...")
+                    self._restart_attempted = True
+                    if self.check_and_restart_ib_gateway():
+                        # Reconnect after restart
+                        if self.connect(host=os.getenv('IB_HOST', 'localhost')):
+                            logger.info("♻️  Retrying download after IB Gateway restart...")
+                            continue
+                        else:
+                            logger.error("❌ Failed to reconnect after restart")
+                    else:
+                        logger.error("❌ Failed to restart IB Gateway")
+
                 # Download historical bars
                 bars = self.ib_manager.ib.reqHistoricalData(
                     contract,
@@ -241,21 +300,22 @@ class DataDownloader:
                 # Convert to DataFrame
                 df = util.df(bars)
 
-                if df.empty:
-                    logger.warning(f"⚠️  Empty DataFrame for {symbol}")
+                if df is None or len(df) == 0:
+                    logger.warning(f"⚠️  No data available for {symbol}")
                     continue
 
                 # Filter by date range (convert datetime to date for comparison)
-                df = df[(df['date'] >= start_dt.date()) & (df['date'] <= end_dt.date())]
+                mask = (df['date'] >= start_dt.date()) & (df['date'] <= end_dt.date())
+                df = df[mask]
 
-                if df.empty:
+                if len(df) == 0:
                     logger.warning(f"⚠️  No data in date range for {symbol}")
                     continue
 
                 # Prepare for CSV export
-                df = df.rename(columns={'date': 'datetime'})
+                df = df.rename(columns={'date': 'datetime'})  # type: ignore
                 df = df[['datetime', 'open', 'high', 'low', 'close', 'volume']]
-                df['datetime'] = pd.to_datetime(df['datetime']).dt.strftime('%Y-%m-%d %H:%M:%S')
+                df['datetime'] = pd.to_datetime(df['datetime']).dt.strftime('%Y-%m-%d %H:%M:%S')  # type: ignore
 
                 # Save to CSV
                 output_file = self.output_dir / f"{symbol}_{resolution}.csv"
@@ -271,21 +331,33 @@ class DataDownloader:
 
             except Exception as e:
                 error_msg = str(e).lower()
+                logger.error(f"❌ Error downloading {symbol}: {type(e).__name__}: {e}")
+
                 # Detect data farm connection issues or timeouts
-                if any(indicator in error_msg for indicator in ['farm', 'timeout', 'connection', 'broken']):
-                    logger.warning(f"⚠️  Possible data farm issue detected: {e}")
-                    # Attempt restart if not already tried
+                connection_issues = any(indicator in error_msg for indicator in [
+                    'farm', 'timeout', 'connection', 'broken', 'disconnected',
+                    'no security definition', 'market data farm', 'hmds'
+                ])
+
+                if connection_issues:
+                    logger.warning(f"⚠️  Connection issue detected: {e}")
+                    # Attempt restart if not already tried for this session
                     if not hasattr(self, '_restart_attempted'):
                         self._restart_attempted = True
                         if self.check_and_restart_ib_gateway():
                             # Reconnect after restart
                             if self.connect(host=os.getenv('IB_HOST', 'localhost')):
-                                logger.info("♻️  Retrying download after IB Gateway restart...")
-                                # Continue to next symbol, will retry on next run
+                                logger.info("♻️  Reconnected after IB Gateway restart - retrying download...")
+                                # Retry this symbol
+                                continue
                             else:
                                 logger.error("❌ Failed to reconnect after restart")
+                        else:
+                            logger.error("❌ Failed to restart IB Gateway")
+                    else:
+                        logger.warning("⚠️  Restart already attempted this session")
 
-                logger.error(f"❌ Error downloading {symbol}: {type(e).__name__}: {e}")
+                # Continue to next symbol regardless
                 continue
 
         logger.info(
@@ -370,7 +442,7 @@ class DataDownloader:
                 return False
 
             # Check for NaN values
-            if df[required_cols].isnull().any().any():
+            if df[required_cols].isnull().any(axis=None):  # type: ignore
                 logger.warning(f"NaN values found in {symbol}")
                 return False
 
