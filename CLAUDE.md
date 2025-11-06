@@ -238,33 +238,32 @@ docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
 
 ```bash
 # Convert consolidated backtest results to ranking format
-source venv/bin/activate
-python scripts/save_backtest_results.py \
+docker exec backtrader-engine python /app/scripts/save_backtest_results.py \
   --input results/parallel_backtests.csv \
   --output results/backtests/ \
   --verbose
 
 # Rank strategies using multi-criteria scoring
-python scripts/strategy_ranker.py \
+docker exec backtrader-engine python /app/scripts/strategy_ranker.py \
   --results-dir results/backtests/ \
   --output rankings.csv \
   --verbose
 
 # Analyze correlations (requires time series data)
-python scripts/correlation_analyzer.py \
+docker exec backtrader-engine python /app/scripts/correlation_analyzer.py \
   --rankings rankings.csv \
   --output filtered_strategies.csv \
   --verbose
 
 # Optimize portfolio allocation
-python scripts/portfolio_optimizer.py \
+docker exec backtrader-engine python /app/scripts/portfolio_optimizer.py \
   --strategies rankings.csv \
   --output portfolio_allocation.csv \
   --method equal_weight \
   --verbose
 
 # Generate comprehensive portfolio analytics
-python scripts/portfolio_analytics.py \
+docker exec backtrader-engine python /app/scripts/portfolio_analytics.py \
   --allocations portfolio_allocation.csv \
   --output portfolio_report.md \
   --export portfolio_analytics.json \
@@ -1015,6 +1014,8 @@ python scripts/run_backtest.py --strategy strategies.my_strategy.MyStrategy --sy
 - Download data: `python scripts/download_data.py --symbols SPY --start 2020-01-01 --end 2024-12-31`
 - Symbol discovery: `python scripts/symbol_discovery.py --scanner high_volume --output csv`
 - Run backtest: `python scripts/run_backtest.py --strategy strategies.sma_crossover.SMACrossover --symbols SPY --start 2020-01-01 --end 2024-12-31`
+- Strategy ranking: `docker exec backtrader-engine python /app/scripts/strategy_ranker.py --results-dir results/backtests/ --output rankings.csv`
+- Portfolio optimization: `docker exec backtrader-engine python /app/scripts/portfolio_optimizer.py --strategies rankings.csv --output portfolio_allocation.csv --method equal_weight`
 - Live trading: `./scripts/start_live_trading.sh`
 - Emergency stop: `./scripts/emergency_stop.sh`
 - View dashboard: `http://localhost:8501`
