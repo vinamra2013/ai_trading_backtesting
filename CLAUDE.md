@@ -147,7 +147,7 @@ Backtests now include:
 **Status**: ✅ Implemented - Optuna-based intelligent optimization with MLflow integration.
 
 ```bash
-# Run inside Docker container
+# Single-threaded optimization
 docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_strategy.py \
   --strategy strategies/sma_crossover.py \
   --param-space /app/scripts/sma_crossover_params.json \
@@ -157,14 +157,42 @@ docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_st
   --metric sharpe_ratio \
   --n-trials 100 \
   --study-name sma_opt_v1
+
+# Multi-threaded optimization (Optuna parallel)
+docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_strategy.py \
+  --strategy strategies/sma_crossover.py \
+  --param-space /app/scripts/sma_crossover_params.json \
+  --symbols SPY \
+  --start 2020-01-01 \
+  --end 2024-12-31 \
+  --metric sharpe_ratio \
+  --n-trials 100 \
+  --n-jobs 4 \
+  --study-name parallel_sma_opt
+
+# Multi-symbol optimization (sequential symbols, parallel trials)
+docker exec backtrader-engine python /app/scripts/optimize_strategy.py \
+  --strategy strategies/rsi_momentum.py \
+  --param-space /app/scripts/rsi_params.json \
+  --symbols SPY,AAPL,MSFT \
+  --start 2021-01-01 \
+  --end 2024-12-31 \
+  --metric sortino_ratio \
+  --n-trials 50 \
+  --n-jobs 2 \
+  --study-name multi_symbol_rsi_opt
 ```
 
 **Features**:
 - **Bayesian Optimization**: Optuna TPE sampler for intelligent parameter search
-- **Distributed Execution**: 4-worker parallel optimization
+- **Parallel Execution**: Multi-threaded optimization trials within single container
+- **Multi-Symbol Support**: Optimize across multiple symbols (sequential processing)
 - **MLflow Integration**: Parent-child run structure for study tracking
 - **Parameter Constraints**: Strategy-aware validation (SMA fast < slow)
 - **Study Resumption**: Continue interrupted optimization studies
+- **Early Stopping**: Median pruner for efficient convergence
+
+**Note**: For distributed optimization across multiple machines/containers, combine with parallel backtesting for individual trials.
 
 #### Parallel Backtesting (Epic 20)
 
