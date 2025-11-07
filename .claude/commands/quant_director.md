@@ -327,7 +327,6 @@ head data/csv/SPY_Daily.csv
 ```
 
 **Note**: Data download requires:
-- Active venv environment (`source venv/bin/activate`)
 - IB Gateway connection (must be running and healthy)
 - Valid IB credentials in `.env` file
 - Market data subscriptions for requested symbols
@@ -408,12 +407,11 @@ jq '{strategy: .strategy.name, symbol: .configuration.symbols[0], return: .perfo
 
 **Rank All Backtests**:
 ```bash
-# Rank strategies with multi-criteria scoring
+# Rank strategies with multi-criteria scoring (direct CSV input)
 docker exec backtrader-engine python /app/scripts/strategy_ranker.py \
-  --results-dir /app/results/backtests/ \
+  --csv-input /app/results/parallel_backtests.csv \
   --output /app/rankings.csv \
-  --top-n 15 \
-  --verbose
+  --top-n 15
 
 # View top rankings
 docker exec backtrader-engine cat /app/rankings.csv | head -20
@@ -470,35 +468,13 @@ cat portfolio_allocation.csv | awk -F',' '{sum+=$4} END {print "Total Capital:",
 ```
 ---
 
-### DEVELOPER REQUESTS LOG
 
-Track all outstanding developer requests here for cross-session continuity.
-
-**Priority 2 (Optimization)**:
-- ⏳ Automated equity monitor with drawdown alerts
-- ⏳ Live vs backtest performance comparison tool
-- ⏳ Risk config automation for deployed strategies
-- ⏳ Correlation matrix calculator for portfolio construction
-
-**Priority 3 (Enhancement)**:
-- ⏳ Regime detection module for market condition awareness
-- ⏳ News/sentiment integration for event-driven strategies
-- ⏳ Multi-timeframe analysis for entry/exit timing
-
----
 
 ### SESSION STATE TRACKING
 
 **Current Session**: $(date +"%Y-%m-%d %H:%M CST")
 
 **Last Completed Phase**: Symbol Discovery (34 symbols identified)
-
-**In Progress**: Backtesting (1 of 24 combinations complete)
-- ✅ AAPL + SMA Crossover: 9.08% return, Sharpe 0.60
-- ⏳ 23 remaining combinations
-
-**Next Action**: Complete batch backtesting, then proceed to ranking
-
 
 **Portfolio Status**: No deployed portfolio yet (pre-deployment phase)
 

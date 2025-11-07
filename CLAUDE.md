@@ -237,17 +237,11 @@ docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
 **Status**: ✅ Implemented - Systematic strategy evaluation and portfolio construction with multi-criteria ranking.
 
 ```bash
-# Convert consolidated backtest results to ranking format
-docker exec backtrader-engine python /app/scripts/save_backtest_results.py \
-  --input results/parallel_backtests.csv \
-  --output results/backtests/ \
-  --verbose
-
-# Rank strategies using multi-criteria scoring
+# Rank strategies using multi-criteria scoring (direct CSV input)
 docker exec backtrader-engine python /app/scripts/strategy_ranker.py \
-  --results-dir results/backtests/ \
+  --csv-input results/parallel_backtests.csv \
   --output rankings.csv \
-  --verbose
+  --top-n 15
 
 # Analyze correlations (requires time series data)
 docker exec backtrader-engine python /app/scripts/correlation_analyzer.py \
@@ -1014,7 +1008,7 @@ python scripts/run_backtest.py --strategy strategies.my_strategy.MyStrategy --sy
 - Download data: `python scripts/download_data.py --symbols SPY --start 2020-01-01 --end 2024-12-31`
 - Symbol discovery: `python scripts/symbol_discovery.py --scanner high_volume --output csv`
 - Run backtest: `python scripts/run_backtest.py --strategy strategies.sma_crossover.SMACrossover --symbols SPY --start 2020-01-01 --end 2024-12-31`
-- Strategy ranking: `docker exec backtrader-engine python /app/scripts/strategy_ranker.py --results-dir results/backtests/ --output rankings.csv`
+- Strategy ranking: `docker exec backtrader-engine python /app/scripts/strategy_ranker.py --csv-input results/parallel_backtests.csv --output rankings.csv --top-n 15`
 - Portfolio optimization: `docker exec backtrader-engine python /app/scripts/portfolio_optimizer.py --strategies rankings.csv --output portfolio_allocation.csv --method equal_weight`
 - Live trading: `./scripts/start_live_trading.sh`
 - Emergency stop: `./scripts/emergency_stop.sh`

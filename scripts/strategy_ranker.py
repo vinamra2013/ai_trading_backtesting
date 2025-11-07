@@ -96,22 +96,31 @@ class StrategyRanker:
         }
 
     def rank_strategies(self, results_dir: Optional[str] = None,
-                       results_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+                        results_df: Optional[pd.DataFrame] = None,
+                        csv_input: Optional[str] = None) -> pd.DataFrame:
         """
         Rank strategies based on multi-criteria scoring.
 
         Args:
             results_dir: Directory containing backtest results (if results_df not provided)
             results_df: Pre-consolidated results DataFrame
+            csv_input: Path to consolidated CSV file (alternative to results_dir)
 
         Returns:
             DataFrame with ranked strategies and composite scores
         """
         # Get consolidated results
         if results_df is None:
-            if results_dir is None:
-                results_dir = self.consolidator.results_dir
-            results_df = self.consolidator.consolidate_to_dataframe()
+            if csv_input is not None:
+                # Load directly from CSV
+                results_df = self._load_from_csv(csv_input)
+            elif results_dir is not None:
+                # Load from JSON files in directory
+                self.consolidator = RankingResultsConsolidator(results_dir)
+                results_df = self.consolidator.consolidate_to_dataframe()
+            else:
+                # Use default directory
+                results_df = self.consolidator.consolidate_to_dataframe()
 
         if results_df is None or results_df.empty:
             logger.warning("No results to rank")
@@ -225,6 +234,56 @@ class StrategyRanker:
 
         return composite.round(2)
 
+    def _load_from_csv(self, csv_path: str) -> pd.DataFrame:
+        """
+        Load backtest results directly from CSV file.
+
+        Args:
+            csv_path: Path to CSV file with consolidated results
+
+        Returns:
+            DataFrame with results ready for ranking
+        """
+        try:
+            df = pd.read_csv(csv_path)
+            logger.info(f"Loaded {len(df)} results from CSV: {csv_path}")
+
+            # Map CSV columns to expected DataFrame format
+            # The CSV has columns like: symbol, strategy, sharpe_ratio, max_drawdown, etc.
+            # We need to ensure the column names match what the ranking functions expect
+
+            # Rename columns if needed
+            column_mapping = {
+                'trade_count': 'total_trades',  # CSV uses trade_count, ranking expects total_trades
+            }
+
+            df = df.rename(columns=column_mapping)
+
+            # Ensure required columns exist with defaults
+            required_columns = ['strategy', 'symbol', 'sharpe_ratio', 'max_drawdown', 'win_rate', 'total_trades', 'profit_factor']
+            for col in required_columns:
+                if col not in df.columns:
+                    if col in ['sharpe_ratio', 'max_drawdown', 'win_rate', 'profit_factor']:
+                        df[col] = 0.0
+                    elif col == 'total_trades':
+                        df[col] = 0
+                    else:
+                        df[col] = 'unknown'
+
+            # Convert data types
+            df['total_trades'] = df['total_trades'].fillna(0).astype(int)
+            df['sharpe_ratio'] = df['sharpe_ratio'].fillna(0.0).astype(float)
+            df['max_drawdown'] = df['max_drawdown'].fillna(0.0).astype(float)
+            df['win_rate'] = df['win_rate'].fillna(0.0).astype(float)
+            df['profit_factor'] = df['profit_factor'].fillna(1.0).astype(float)
+
+            logger.info(f"Prepared DataFrame with {len(df)} rows and columns: {list(df.columns)}")
+            return df
+
+        except Exception as e:
+            logger.error(f"Failed to load CSV from {csv_path}: {e}")
+            return pd.DataFrame()
+
     def get_top_strategies(self, ranked_df: pd.DataFrame, top_n: int = 15) -> pd.DataFrame:
         """
         Get top N strategies from ranked results.
@@ -337,11 +396,18 @@ Examples:
         """
     )
 
-    parser.add_argument(
+    # Make results-dir and csv-input mutually exclusive
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         '--results-dir',
         type=str,
-        required=True,
         help='Directory containing backtest result files'
+    )
+
+    group.add_argument(
+        '--csv-input',
+        type=str,
+        help='Path to consolidated backtest results CSV file'
     )
 
     parser.add_argument(
@@ -398,8 +464,12 @@ Examples:
         ranker = StrategyRanker(args.config)
 
         # Rank strategies
-        print(f"Loading backtest results from: {args.results_dir}")
-        rankings = ranker.rank_strategies(args.results_dir)
+        if args.csv_input:
+            print(f"Loading backtest results from CSV: {args.csv_input}")
+            rankings = ranker.rank_strategies(csv_input=args.csv_input)
+        else:
+            print(f"Loading backtest results from directory: {args.results_dir}")
+            rankings = ranker.rank_strategies(args.results_dir)
 
         if rankings.empty:
             print("No strategies found to rank")
