@@ -93,7 +93,7 @@ class EODStrategy(BaseStrategy):
         if self.params.enable_db_logging:
             self.db_logger = BacktraderDBLogger(self, self.params.algorithm_name)
 
-        self.log(f"EOD Strategy initialized: Liquidation at {self.eod_hour}:{self.eod_minute:02d}")
+        self.log(f"EOD Strategy initialized: Liquidation at {self.params.eod_hour}:{self.params.eod_minute:02d}")
 
     # ===================================================================
     # EOD Procedures

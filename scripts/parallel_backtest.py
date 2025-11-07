@@ -38,7 +38,7 @@ except ImportError as e:
     from run_backtest import BacktestRunner
     from results_consolidator import ResultsConsolidator
 
-# Configure logging
+# Configure logging (will be updated based on debug flag)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -109,7 +109,7 @@ class ParallelBacktestOrchestrator:
         self.config = self._load_config()
         self.mlflow_config = self._load_mlflow_config()
 
-        logger.info(f"Initialized orchestrator with Redis queue ({redis_host}:{redis_port}), batch_id: {self.batch_id}")
+        logger.debug(f"Initialized orchestrator with Redis queue ({redis_host}:{redis_port}), batch_id: {self.batch_id}")
 
     def _load_config(self) -> Dict[str, Any]:
         """Load backtest configuration"""
@@ -117,7 +117,7 @@ class ParallelBacktestOrchestrator:
             import yaml
             with open(self.config_path, 'r') as f:
                 config = yaml.safe_load(f)
-            logger.info(f"Loaded configuration from {self.config_path}")
+            logger.debug(f"Loaded configuration from {self.config_path}")
             return config
         except Exception as e:
             logger.warning(f"Could not load config from {self.config_path}: {e}")
@@ -130,7 +130,7 @@ class ParallelBacktestOrchestrator:
             import yaml
             with open(mlflow_config_path, 'r') as f:
                 mlflow_config = yaml.safe_load(f)
-            logger.info(f"Loaded MLflow configuration from {mlflow_config_path}")
+            logger.debug(f"Loaded MLflow configuration from {mlflow_config_path}")
             return mlflow_config
         except Exception as e:
             logger.warning(f"Could not load MLflow config from {mlflow_config_path}: {e}")
@@ -156,12 +156,13 @@ class ParallelBacktestOrchestrator:
 
             validated_strategies.append(str(strategy_path))
 
-        logger.info(f"Validated {len(symbols)} symbols and {len(validated_strategies)} strategies")
+        logger.debug(f"Validated {len(symbols)} symbols and {len(validated_strategies)} strategies")
         return symbols, validated_strategies
 
     def _generate_job_matrix(self, symbols: List[str], strategies: List[str],
-                            strategy_params: Optional[Dict[str, Dict]] = None,
-                            priority: int = 0) -> List[BacktestJob]:
+                             strategy_params: Optional[Dict[str, Dict]] = None,
+                             priority: int = 0, start_date: Optional[str] = None,
+                             end_date: Optional[str] = None) -> List[BacktestJob]:
         """Generate matrix of all symbol-strategy combinations"""
         jobs = []
         strategy_params = strategy_params or {}
@@ -190,8 +191,8 @@ class ParallelBacktestOrchestrator:
                     job_id=job_id,
                     symbol=symbol,
                     strategy_path=strategy_path,
-                    start_date=self.config.get('start_date', '2020-01-01'),
-                    end_date=self.config.get('end_date', '2024-12-31'),
+                    start_date=start_date or self.config.get('start_date', '2020-01-01'),
+                    end_date=end_date or self.config.get('end_date', '2024-12-31'),
                     strategy_params=params,
                     mlflow_config=mlflow_config,  # Enable MLflow with extracted parameters
                     batch_id=self.batch_id,
@@ -199,13 +200,14 @@ class ParallelBacktestOrchestrator:
                 )
                 jobs.append(job)
 
-        logger.info(f"Generated {len(jobs)} backtest jobs")
+        logger.debug(f"Generated {len(jobs)} backtest jobs")
         return jobs
 
     def execute_batch(self, symbols: List[str], strategies: List[str],
                        strategy_params: Optional[Dict[str, Dict]] = None,
                        show_progress: bool = True, timeout: int = 600,
-                       priority: int = 0) -> pd.DataFrame:
+                       priority: int = 0, start_date: Optional[str] = None,
+                       end_date: Optional[str] = None) -> pd.DataFrame:
         """
         Execute batch of parallel backtests using Redis queue
 
@@ -215,6 +217,9 @@ class ParallelBacktestOrchestrator:
             strategy_params: Optional strategy-specific parameters
             show_progress: Whether to show progress bar
             timeout: Timeout per job in seconds
+            priority: Job priority (higher = processed first)
+            start_date: Start date (YYYY-MM-DD), overrides config
+            end_date: End date (YYYY-MM-DD), overrides config
 
         Returns:
             Consolidated results DataFrame
@@ -225,9 +230,9 @@ class ParallelBacktestOrchestrator:
         symbols, strategies = self._validate_inputs(symbols, strategies)
 
         # Generate job matrix
-        jobs = self._generate_job_matrix(symbols, strategies, strategy_params, priority)
+        jobs = self._generate_job_matrix(symbols, strategies, strategy_params, priority, start_date, end_date)
 
-        logger.info(f"Submitting {len(jobs)} backtest jobs to Redis queue")
+        logger.debug(f"Submitting {len(jobs)} backtest jobs to Redis queue")
 
         # Submit all jobs to Redis priority queue (sorted set)
         for job in jobs:
@@ -250,6 +255,9 @@ class ParallelBacktestOrchestrator:
 
         while len(completed_jobs) < len(jobs):
             try:
+                # Small delay to allow workers to complete writing results
+                time.sleep(0.1)
+
                 # Check for completed results
                 for job in jobs:
                     if job.job_id in completed_jobs:
@@ -261,14 +269,18 @@ class ParallelBacktestOrchestrator:
                     if result_data:
                         try:
                             result = json.loads(result_data)
-                            if result.get('status') == 'success':
+                            status = result.get('status')
+                            logger.debug(f"Processing result for {job.job_id}: status={status}")
+                            if status == 'success':
                                 results.append(result)
+                                logger.debug(f"Marked job {job.job_id} as successful")
+                                self.redis.delete(result_key)  # Clean up successful results
                             else:
                                 failed_jobs.append((job, result))
-                                logger.warning(f"Backtest failed: {job.job_id}")
+                                logger.warning(f"Backtest failed: {job.job_id} (status: {status})")
+                                # Keep failed results for inspection
 
                             completed_jobs.add(job.job_id)
-                            self.redis.delete(result_key)  # Clean up
 
                             if progress_bar:
                                 progress_bar.update(1)
@@ -358,9 +370,24 @@ def main():
     parser.add_argument('--timeout', type=int, default=600,
                         help='Timeout per job in seconds')
     parser.add_argument('--priority', type=int, default=0,
-                        help='Job priority (higher = processed first, default: 0)')
+                        help='Job priority (higher = processed first)')
+    parser.add_argument('--debug', action='store_true',
+                        help='Enable debug logging')
+    parser.add_argument('--start', type=str, default=None,
+                        help='Start date (YYYY-MM-DD)')
+    parser.add_argument('--end', type=str, default=None,
+                        help='End date (YYYY-MM-DD)')
+    parser.add_argument('--show-progress', action='store_true',
+                        help='Show progress bar during execution')
 
     args = parser.parse_args()
+
+    # Configure logging level based on debug flag
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.info("Debug logging enabled")
+    else:
+        logging.getLogger().setLevel(logging.INFO)
 
     # Load strategy parameters if provided
     strategy_params = None
@@ -382,8 +409,11 @@ def main():
             symbols=args.symbols,
             strategies=args.strategies,
             strategy_params=strategy_params,
+            show_progress=args.show_progress,
             timeout=args.timeout,
-            priority=args.priority
+            priority=args.priority,
+            start_date=args.start,
+            end_date=args.end
         )
 
         # Display summary
