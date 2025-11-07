@@ -9,7 +9,7 @@ initial_capital: 100000
 data:
   resolution: Daily  # Options: Daily, Hour, Minute, 5Minute, 15Minute, 30Minute
   feed_type: csv     # Options: csv, pandas, ib_live
-  data_dir: /app/data/csv
+  data_dir: data/csv
 
 # Broker settings
 broker:

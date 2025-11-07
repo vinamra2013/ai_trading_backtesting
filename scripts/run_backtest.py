@@ -430,7 +430,7 @@ def main():
     parser.add_argument('--resolution', default='Daily', help='Resolution')
     parser.add_argument('--params', type=json.loads, default={}, help='Strategy params as JSON')
     parser.add_argument('--params-file', help='JSON file containing strategy parameters')
-    parser.add_argument('--config', default='/app/config/backtest_config.yaml', help='Config file')
+    parser.add_argument('--config', default='config/backtest_config.yaml', help='Config file')
     parser.add_argument('--export-csv', action='store_true', help='Export trades to CSV')
     parser.add_argument('--export-text', action='store_true', help='Export text summary report')
     
@@ -441,7 +441,7 @@ def main():
     parser.add_argument('--strategy-family', default='Unknown', help='Strategy family for MLflow tagging')
     parser.add_argument('--team', default='quant_research', help='Team responsible for experiment')
     parser.add_argument('--status', default='research', help='Experiment status (research, testing, production)')
-    parser.add_argument('--mlflow-config', default='/app/config/mlflow_config.yaml', help='MLflow config file')
+    parser.add_argument('--mlflow-config', default='config/mlflow_config.yaml', help='MLflow config file')
     parser.add_argument('--output-json', help='Output JSON file for results (for optimizer)')
 
     args = parser.parse_args()

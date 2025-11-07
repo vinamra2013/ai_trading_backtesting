@@ -24,7 +24,7 @@ class CerebroEngine:
     Backtrader Cerebro engine wrapper with YAML configuration support
     """
 
-    def __init__(self, config_path: str = '/app/config/backtest_config.yaml'):
+    def __init__(self, config_path: str = 'config/backtest_config.yaml'):
         """
         Initialize Cerebro engine
 
@@ -181,10 +181,27 @@ class CerebroEngine:
         data_path = Path(str(data_dir))
 
         for symbol in symbols:
-            csv_file = data_path / f"{symbol}_{resolution}.csv"
+            # Try the organized structure first: data/csv/resolution/symbol/
+            symbol_dir = data_path / resolution / symbol
+            csv_file = None
 
-            if not csv_file.exists():
-                print(f"⚠️  Warning: Data file not found: {csv_file}")
+            if symbol_dir.exists():
+                # Find the most recent CSV file for this symbol/resolution
+                csv_files = list(symbol_dir.glob(f"{symbol}_{resolution}_*.csv"))
+                if csv_files:
+                    # Sort by modification time (most recent first)
+                    csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                    csv_file = csv_files[0]
+                else:
+                    print(f"⚠️  Warning: No CSV files found in {symbol_dir}")
+            else:
+                # Fallback to old structure: data/csv/symbol_resolution.csv
+                csv_file = data_path / f"{symbol}_{resolution}.csv"
+                if not csv_file.exists():
+                    csv_file = None
+
+            if csv_file is None or not csv_file.exists():
+                print(f"⚠️  Warning: Data file not found for {symbol} in {resolution} resolution")
                 continue
 
             self.add_data(
