@@ -8,6 +8,7 @@ Replaces LEAN backtest runner with Backtrader Cerebro execution + MLflow trackin
 """
 
 import argparse
+import logging
 import sys
 import json
 import uuid
@@ -19,6 +20,13 @@ import importlib.util
 import backtrader as bt
 import yaml
 import pandas as pd
+
+# Configure logging (will be updated based on debug flag)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 from scripts.cerebro_engine import CerebroEngine
 from scripts.backtrader_analyzers import (
@@ -33,7 +41,7 @@ try:
     from scripts.metrics import QuantStatsAnalyzer, RegimeAnalyzer, AlphaBetaAnalyzer
     ADVANCED_METRICS_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  Advanced metrics libraries not available: {e}")
+    logger.debug(f"Advanced metrics libraries not available: {e}")
     ADVANCED_METRICS_AVAILABLE = False
 
 
@@ -58,8 +66,8 @@ class BacktestRunner:
             self.mlflow_logger = MLflowBacktestLogger()
             self.mlflow_enabled = True
         except Exception as e:
-            print(f"⚠️  MLflow configuration not found or invalid: {e}")
-            print("   Continuing without MLflow integration...")
+            logger.debug(f"MLflow configuration not found or invalid: {e}")
+            logger.debug("Continuing without MLflow integration...")
 
     def load_strategy_class(self, strategy_path: str) -> Type[bt.Strategy]:
         """Dynamically load strategy class from file"""
@@ -131,7 +139,7 @@ class BacktestRunner:
             artifacts['backtest_summary'] = str(summary_path)
             
         except Exception as e:
-            print(f"⚠️  Warning: Failed to prepare artifacts: {e}")
+            logger.debug(f"Warning: Failed to prepare artifacts: {e}")
             
         return artifacts
 
@@ -443,8 +451,16 @@ def main():
     parser.add_argument('--status', default='research', help='Experiment status (research, testing, production)')
     parser.add_argument('--mlflow-config', default='config/mlflow_config.yaml', help='MLflow config file')
     parser.add_argument('--output-json', help='Output JSON file for results (for optimizer)')
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
 
     args = parser.parse_args()
+
+    # Configure logging level based on debug flag
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.info("Debug logging enabled")
+    else:
+        logging.getLogger().setLevel(logging.INFO)
 
     # Load parameters from file if specified
     if args.params_file:

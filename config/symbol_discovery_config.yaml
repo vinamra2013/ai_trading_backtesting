@@ -12,6 +12,7 @@ scanners:
     description: "Top percentage gainers"
     parameters:
       number_of_rows: 50
+      instrument_type: "STK"
       above_price: 5.0
       below_price: 500.0
       above_volume: 1000000
@@ -22,17 +23,19 @@ scanners:
     description: "Top percentage losers"
     parameters:
       number_of_rows: 50
+      instrument_type: "STK"
       above_price: 5.0
       below_price: 500.0
       above_volume: 1000000
 
   # High volume stocks
   high_volume:
-    type: "HIGH_VOLUMNE"
-    scan_code: "MOST_ACTIVE"
+    type: "HIGH_VOLUME"
+    scan_code: "TOP_VOLUME"
     description: "High volume stocks"
     parameters:
       number_of_rows: 100
+      instrument_type: "STK"
       above_price: 5.0
       below_price: 500.0
       above_volume: 2000000  # $2M+ avg daily volume
@@ -40,17 +43,18 @@ scanners:
   # Most active contracts
   most_active_stocks:
     type: "MOST_ACTIVE"
-    scan_code: "MOST_ACTIVE"
+    scan_code: "TOP_TRADE_COUNT"
     description: "Most active stocks"
     parameters:
       number_of_rows: 100
+      instrument_type: "STK"
       above_price: 5.0
       below_price: 500.0
       above_volume: 1000000
 
   most_active_etfs:
     type: "MOST_ACTIVE"
-    scan_code: "MOST_ACTIVE"
+    scan_code: "TOP_TRADE_COUNT"
     description: "Most active ETFs"
     parameters:
       number_of_rows: 50
@@ -75,7 +79,6 @@ filters:
   # Liquidity filters
   liquidity:
     min_avg_volume: 1000000  # $1M minimum average daily volume
-    min_avg_volume_pct: 0.5  # 50% of average volume threshold
 
   # Volatility filters (ATR-based)
   volatility:
@@ -90,14 +93,15 @@ filters:
 
   # Exchange filters
   exchanges:
-    allowed:
-      - "NYSE"
-      - "NASDAQ"
-      - "ARCA"  # ETFs
-    excluded:
-      - "OTC"
-      - "PINK"
-      - "GREY"
+     allowed:
+       - "NYSE"
+       - "NASDAQ"
+       - "ARCA"  # ETFs
+       - "SMART"  # IBKR smart routing
+     excluded:
+       - "OTC"
+       - "PINK"
+       - "GREY"
 
   # Sector/Industry filters (optional)
   sectors:
@@ -113,13 +117,15 @@ data_collection:
 
   # Market data sources
   data_sources:
-    primary: "IBKR"
-    fallback: "YAHOO"  # If IBKR data unavailable
+    primary: "YFINANCE"
+    fallback: "PREDEFINED"  # If yfinance data unavailable
 
   # Rate limiting
   rate_limiting:
-    max_requests_per_minute: 30
-    request_delay_seconds: 2.0
+    max_requests_per_minute: 30  # Finnhub free tier: 60/minute
+    request_delay_seconds: 1.0   # Conservative delay between requests
+    max_retries: 3
+    backoff_factor: 2.0
 
 # Output Configuration
 output:
@@ -170,7 +176,7 @@ database:
 # Logging Configuration
 logging:
   level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(levelname)s - %(message)s"
   file: "logs/symbol_discovery.log"
 
   # Performance logging

@@ -4,22 +4,25 @@ FROM python:3.12-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies with optimized apt
 RUN apt-get update && apt-get install -y \
     git \
     wget \
     gcc \
     g++ \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast Python package installation
+RUN pip install --no-cache-dir uv
 
 # Create virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Backtrader and core dependencies
-RUN pip install --upgrade pip && \
-    pip install \
+RUN uv pip install --upgrade pip && \
+    uv pip install \
     backtrader \
     ib_insync \
     pandas \
@@ -31,16 +34,19 @@ RUN pip install --upgrade pip && \
     h5py \
     pytz \
     pyyaml \
-    requests
+    requests \
+    finnhub-python \
+    python-dotenv \
+    redis
 
 # Install additional packages for enhanced Backtrader functionality
-RUN pip install \
+RUN uv pip install \
     backtrader[plotting] \
     plotly \
     yfinance
 
 # Install Epic 17: AI-Native Research Lab dependencies
-RUN pip install \
+RUN uv pip install \
     mlflow \
     psycopg2-binary \
     quantstats \

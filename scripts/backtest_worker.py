@@ -127,19 +127,24 @@ class BacktestWorker:
     def _execute_backtest(self, job: BacktestJob) -> Dict[str, Any]:
         """Execute single backtest job"""
         logger.info(f"Worker {self.worker_id} executing: {job.symbol} with {Path(job.strategy_path).name}")
+        logger.debug(f"Job details: symbol={job.symbol}, strategy={job.strategy_path}, dates={job.start_date} to {job.end_date}, params={job.strategy_params}")
 
         try:
             # Import backtest runner dynamically
             sys.path.insert(0, '/app')
+            logger.debug(f"Worker {self.worker_id}: Importing BacktestRunner")
             from scripts.run_backtest import BacktestRunner
 
             # Initialize backtest runner
+            logger.debug(f"Worker {self.worker_id}: Initializing BacktestRunner")
             runner = BacktestRunner()
 
             # Execute backtest
             mlflow_kwargs = job.mlflow_config or {}
             mlflow_enabled = mlflow_kwargs.pop('enabled', False)
+            logger.debug(f"Worker {self.worker_id}: MLflow enabled = {mlflow_enabled}")
 
+            logger.debug(f"Worker {self.worker_id}: Calling runner.run() with params: strategy_path={job.strategy_path}, symbols=[{job.symbol}], start_date={job.start_date}, end_date={job.end_date}")
             result = runner.run(
                 strategy_path=job.strategy_path,
                 symbols=[job.symbol],
@@ -149,6 +154,7 @@ class BacktestWorker:
                 mlflow_enabled=mlflow_enabled,
                 **mlflow_kwargs
             )
+            logger.debug(f"Worker {self.worker_id}: runner.run() returned result with keys: {list(result.keys()) if result else 'None'}")
 
             # Add job metadata
             result['job_id'] = job.job_id

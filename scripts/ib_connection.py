@@ -16,7 +16,9 @@ import time
 import logging
 import asyncio
 import subprocess
-from typing import Optional
+import warnings
+import random
+from typing import Optional, List
 from datetime import datetime
 from ib_insync import IB, util
 
@@ -72,11 +74,74 @@ class IBConnectionManager:
         self.is_connected = False
         self.last_health_check = None
         self.retry_count = 0
+        self.data_farm_warnings: List[str] = []
 
         logger.info(
             f"IBConnectionManager initialized: {self.host}:{self.port} "
             f"(client_id={self.client_id}, readonly={self.readonly})"
         )
+
+    def _setup_warning_monitor(self):
+        """Set up monitoring for IB warnings, especially data farm connection issues"""
+        # Capture warnings from ib_insync
+        def warning_handler(message, category, filename, lineno, file=None, line=None):
+            warning_str = str(message).lower()
+            if any(indicator in warning_str for indicator in [
+                'farm connection is broken', 'market data farm', 'hmds data farm',
+                'sec-def data farm', 'usfarm', 'hmds', 'secdefil'
+            ]):
+                self.data_farm_warnings.append(str(message))
+                logger.warning(f"⚠️  Data farm warning detected: {message}")
+
+        # Install the warning handler
+        original_showwarning = warnings.showwarning
+        warnings.showwarning = warning_handler
+
+        # Store original handler for cleanup
+        self._original_showwarning = original_showwarning
+
+    def _cleanup_warning_monitor(self):
+        """Clean up warning monitoring"""
+        if hasattr(self, '_original_showwarning'):
+            warnings.showwarning = self._original_showwarning
+
+    def _test_data_farm_connection(self) -> bool:
+        """
+        Test data farm connectivity by attempting to download historical data
+
+        Returns:
+            bool: True if data farm connections appear healthy
+        """
+        try:
+            from ib_insync import Stock
+
+            logger.info("🔍 Testing data farm connectivity with historical data request...")
+
+            # Create a simple contract for testing
+            contract = Stock('SPY', 'SMART', 'USD')
+            self.ib.qualifyContracts(contract)
+
+            # Request a small amount of historical data to test data farm connectivity
+            bars = self.ib.reqHistoricalData(
+                contract,
+                endDateTime='',  # Empty string means current time
+                durationStr='1 D',  # 1 day
+                barSizeSetting='1 day',
+                whatToShow='TRADES',
+                useRTH=True
+            )
+
+            # If we get data back, data farms are working
+            if bars and len(bars) > 0:
+                logger.info("✅ Data farm connections verified - received historical data")
+                return True
+            else:
+                logger.warning("⚠️  No historical data received - data farms may be broken")
+                return False
+
+        except Exception as e:
+            logger.warning(f"⚠️  Historical data request failed: {e} - data farms may be broken")
+            return False
 
     def connect(self) -> bool:
         """
@@ -87,103 +152,103 @@ class IBConnectionManager:
         """
         logger.info(f"Attempting to connect to IB Gateway at {self.host}:{self.port}")
 
-        # Try different client IDs if the first one fails
-        client_ids_to_try = list(range(1, 11))  # Try client IDs 1-10
+        # Set up warning monitoring
+        self._setup_warning_monitor()
 
-        for client_id in client_ids_to_try:
-            attempt_desc = f"client_id={client_id}"
+        try:
+            # Try random client IDs to avoid conflicts
+            client_ids_tried = set()
+            max_attempts = 10
 
-            try:
-                logger.info(f"Connection {attempt_desc}")
+            for attempt in range(max_attempts):
+                # Generate random client ID between 1 and 999
+                client_id = random.randint(1, 999)
+                while client_id in client_ids_tried:
+                    client_id = random.randint(1, 999)
+                client_ids_tried.add(client_id)
+                attempt_desc = f"client_id={client_id}"
 
-                # Connect using ib_insync
-                self.ib.connect(
-                    host=self.host,
-                    port=self.port,
-                    clientId=client_id,
-                    readonly=self.readonly,
-                    timeout=10  # Shorter timeout
-                )
+                try:
+                    logger.info(f"Connection {attempt_desc}")
 
-                # Wait a moment to see if connection stays alive
-                time.sleep(2)
+                    # Reset data farm warnings for this attempt
+                    self.data_farm_warnings.clear()
 
-                if self.ib.isConnected():
-                    # Wait a moment for any data farm warnings to appear
+                    # Connect using ib_insync
+                    self.ib.connect(
+                        host=self.host,
+                        port=self.port,
+                        clientId=client_id,
+                        readonly=self.readonly,
+                        timeout=10  # Shorter timeout
+                    )
+
+                    # Wait a moment to see if connection stays alive
                     time.sleep(2)
 
-                    # Check for data farm connection issues
-                    data_farm_broken = False
-                    try:
-                        if hasattr(self.ib, 'client') and self.ib.client:
-                            # Check client errors for data farm warnings
-                            if hasattr(self.ib.client, 'errors') and self.ib.client.errors:
-                                for error in self.ib.client.errors[-10:]:  # Check last 10 errors
-                                    error_str = str(error).lower()
-                                    if "connection is broken" in error_str and any(code in error_str for code in ['2103', '2105', '2157']):
-                                        logger.warning(f"⚠️  Data farm connection broken detected: {error}")
-                                        data_farm_broken = True
-                                        break
-                    except Exception as e:
-                        logger.debug(f"Error checking data farm status: {e}")
+                    if self.ib.isConnected():
+                        # Wait a moment for any data farm warnings to appear
+                        time.sleep(3)  # Give more time for warnings
 
-                    if data_farm_broken:
-                        logger.warning("🔄 Data farm connection broken - restarting IB Gateway...")
-                        try:
-                            result = subprocess.run(
-                                ['docker', 'compose', 'restart', 'ib-gateway'],
-                                capture_output=True,
-                                text=True,
-                                timeout=60,
-                                cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                            )
-                            if result.returncode == 0:
-                                logger.info("✅ IB Gateway restarted, waiting 30 seconds...")
-                                time.sleep(30)
-                                # Try connecting again (will use next client ID)
-                                continue
-                            else:
-                                logger.error(f"❌ Failed to restart IB Gateway: {result.stderr}")
+                        # Test data farm connectivity with actual data download
+                        if not self._test_data_farm_connection():
+                            logger.warning("🔄 Data farm connection broken - restarting IB Gateway...")
+                            try:
+                                result = subprocess.run(
+                                    ['docker', 'compose', 'restart', 'ib-gateway'],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=60,
+                                    cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                                )
+                                if result.returncode == 0:
+                                    logger.info("✅ IB Gateway restarted, waiting 30 seconds...")
+                                    time.sleep(30)
+                                    # Try connecting again (will use next client ID)
+                                    continue
+                                else:
+                                    logger.error(f"❌ Failed to restart IB Gateway: {result.stderr}")
+                                    return False
+                            except Exception as e:
+                                logger.error(f"❌ Error restarting IB Gateway: {e}")
                                 return False
-                        except Exception as e:
-                            logger.error(f"❌ Error restarting IB Gateway: {e}")
-                            return False
 
-                    self.is_connected = True
-                    self.retry_count = 0
-                    self.last_health_check = datetime.now()
-                    # Update the actual client ID used
-                    self.client_id = client_id
+                        self.is_connected = True
+                        self.retry_count = 0
+                        self.last_health_check = datetime.now()
+                        # Update the actual client ID used
+                        self.client_id = client_id
 
-                    logger.info(
-                        f"✅ Successfully connected to IB Gateway "
-                        f"(serverVersion={self.ib.client.serverVersion()}, clientId={client_id})"
+                        logger.info(
+                            f"✅ Successfully connected to IB Gateway "
+                            f"(serverVersion={self.ib.client.serverVersion() if self.ib.client else 'unknown'}, clientId={client_id})"
+                        )
+                        return True
+                    else:
+                        logger.warning(f"Connection {attempt_desc} failed - trying next client ID")
+
+                except ConnectionRefusedError:
+                    logger.error(
+                        f"Connection refused by IB Gateway at {self.host}:{self.port}. "
+                        f"Is IB Gateway running?"
                     )
-                    return True
-                else:
-                    logger.warning(f"Connection {attempt_desc} failed - trying next client ID")
+                    # For connection refused, restart container and try again
+                    if self._restart_gateway_on_connection_refused():
+                        # Try the same client ID again after restart
+                        continue
+                    else:
+                        return False
 
-            except ConnectionRefusedError:
-                logger.error(
-                    f"Connection refused by IB Gateway at {self.host}:{self.port}. "
-                    f"Is IB Gateway running?"
-                )
-                # For connection refused, restart container and try again
-                if self._restart_gateway_on_connection_refused():
-                    # Try the same client ID again after restart
-                    continue
-                else:
-                    return False
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    logger.warning(f"Connection {attempt_desc} failed: {type(e).__name__}: {e} - trying next client ID")
 
-            except Exception as e:
-                error_msg = str(e).lower()
-                logger.warning(f"Connection {attempt_desc} failed: {type(e).__name__}: {e} - trying next client ID")
+            logger.error(f"❌ Failed to connect after trying {len(client_ids_tried)} client IDs")
+            return False
 
-        logger.error(f"❌ Failed to connect after trying {len(client_ids_to_try)} client IDs")
-        return False
-
-        logger.error(f"❌ Failed to connect after trying {len(client_ids_to_try)} client IDs with {self.max_retries} attempts each")
-        return False
+        finally:
+            # Clean up warning monitoring
+            self._cleanup_warning_monitor()
 
     def _restart_gateway_on_connection_refused(self) -> bool:
         """
@@ -291,15 +356,14 @@ class IBConnectionManager:
             'readonly': self.readonly,
             'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
             'retry_count': self.retry_count,
-            'server_version': self.ib.client.serverVersion() if self.ib.isConnected() else None,
-            'connection_time': self.ib.client.connTime if self.ib.isConnected() else None
+            'server_version': self.ib.client.serverVersion() if self.ib.isConnected() else None
         }
 
 
 # Convenience function for simple connections
 def get_ib_connection(
     host: str = 'ib-gateway',
-    port: int = None,
+    port: Optional[int] = None,
     client_id: int = 1,
     readonly: bool = False
 ) -> IBConnectionManager:

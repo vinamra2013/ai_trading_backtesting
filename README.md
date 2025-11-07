@@ -341,6 +341,17 @@ nano .env  # Add your IB credentials
    IB_TRADING_MODE=paper
    ```
 
+### Finnhub API Setup
+
+1. **Sign up**: https://finnhub.io/
+2. **Get API Key**: Dashboard → API Keys → Create API Key
+3. **Add to `.env`**:
+   ```
+   FINNHUB_API_KEY=your_finnhub_api_key_here
+   ```
+
+**Note**: Finnhub provides a free tier with 60 requests/minute, perfect for symbol discovery.
+
 ### Access Points
 
 - **Dashboard**: http://localhost:8501

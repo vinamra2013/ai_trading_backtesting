@@ -8,9 +8,26 @@ Replaces LEAN CLI with direct Interactive Brokers API calls
 Features:
 - Download historical market data from IB
 - Support for multiple symbols and date ranges
+- Organized folder structure: data/csv/resolution/symbol/
 - CSV output format (compatible with Backtrader)
 - Data quality validation
 - Resume capability for interrupted downloads
+
+Folder Structure:
+data/
+└── csv/
+    ├── Daily/
+    │   ├── SPY/
+    │   │   ├── SPY_Daily_20200101_20241231.csv
+    │   │   └── SPY_Daily_20240101_20241231.csv
+    │   └── QQQ/
+    │       └── QQQ_Daily_20200101_20241231.csv
+    ├── Hourly/
+    │   └── SPY/
+    │       └── SPY_Hourly_20200101_20241231.csv
+    └── Minute/
+        └── SPY/
+            └── SPY_Minute_20200101_20241231.csv
 """
 
 import argparse
@@ -68,26 +85,25 @@ class DataDownloader:
         'Second': 'D',     # Days for second data
     }
 
-    def __init__(self, env_file: str = ".env"):
+    def __init__(self, env_file: str = ".env", client_id: int = 1):
         """
         Initialize downloader with IB connection
 
         Args:
             env_file: Path to .env file containing IB credentials
+            client_id: IB client ID to use
         """
         load_dotenv(env_file)
 
+        self.client_id = client_id
         self.ib_manager = None
         # Use relative path or environment variable for data directory
         data_folder = os.getenv('BACKTRADER_DATA_FOLDER', os.path.join(os.getcwd(), 'data'))
-        self.output_dir = Path(data_folder) / 'csv'
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.base_data_dir = Path(data_folder)
+        # Organized structure: data/csv/resolution/symbol/
+        self.output_dir = None  # Will be set per symbol/resolution
 
-        # Track data farm connection warnings
-        self.data_farm_warnings = []
-        self._restart_attempted = False
-
-        logger.info(f"DataDownloader initialized. Output dir: {self.output_dir}")
+        logger.info(f"DataDownloader initialized. Base data dir: {self.base_data_dir}")
 
     def _check_data_farm_connection(self) -> bool:
         """
@@ -112,7 +128,7 @@ class DataDownloader:
                 barSizeSetting='1 day',
                 whatToShow='TRADES',
                 useRTH=True,
-                timeout=10  # Short timeout
+                timeout=10  # Reasonable timeout
             )
 
             # If we get data back, data farms are working
@@ -120,19 +136,20 @@ class DataDownloader:
                 logger.info("✅ Data farm connections verified")
                 return True
             else:
-                logger.warning("⚠️  No data returned from data farm test")
+                logger.error("❌ No data returned from data farm test - data farms appear broken")
                 return False
 
         except Exception as e:
-            logger.warning(f"⚠️  Data farm connection check failed: {e}")
+            logger.error(f"❌ Data farm connection check failed: {e}")
             return False
 
-    def connect(self, host: Optional[str] = None) -> bool:
+    def connect(self, host: Optional[str] = None, client_id: int = 1) -> bool:
         """
         Connect to IB Gateway
 
         Args:
             host: IB Gateway host (default: from env or 'ib-gateway')
+            client_id: IB client ID to use
 
         Returns:
             bool: True if connected successfully
@@ -142,7 +159,7 @@ class DataDownloader:
             if host is None:
                 host = os.getenv('IB_HOST', 'ib-gateway')
 
-            self.ib_manager = IBConnectionManager(host=host, readonly=True)
+            self.ib_manager = IBConnectionManager(host=host, client_id=client_id, readonly=True)
             success = self.ib_manager.connect()
 
             if success:
@@ -258,17 +275,9 @@ class DataDownloader:
         # Check data farm connections immediately after connecting
         logger.info("Checking data farm connections...")
         if not self._check_data_farm_connection():
-            logger.warning("🔄 Data farm connections appear broken - restarting IB Gateway...")
-            if self.check_and_restart_ib_gateway():
-                # Reconnect after restart
-                if self.connect(host=os.getenv('IB_HOST', 'localhost')):
-                    logger.info("♻️  Reconnected after IB Gateway restart")
-                else:
-                    logger.error("❌ Failed to reconnect after restart")
-                    return False
-            else:
-                logger.error("❌ Failed to restart IB Gateway")
-                return False
+            logger.error("❌ Data farm connections appear broken - cannot proceed with download")
+            logger.error("This usually means IB Gateway data farms are not available")
+            return False
 
         # Validate resolution
         if resolution not in self.RESOLUTION_MAP:
@@ -317,20 +326,9 @@ class DataDownloader:
                 time.sleep(1)
 
                 # Check if data farm connections are working
-                data_farm_broken = not self._check_data_farm_connection()
-
-                if data_farm_broken and not self._restart_attempted:
-                    logger.warning("🔄 Data farm connection broken - restarting IB Gateway...")
-                    self._restart_attempted = True
-                    if self.check_and_restart_ib_gateway():
-                        # Reconnect after restart
-                        if self.connect(host=os.getenv('IB_HOST', 'localhost')):
-                            logger.info("♻️  Retrying download after IB Gateway restart...")
-                            continue
-                        else:
-                            logger.error("❌ Failed to reconnect after restart")
-                    else:
-                        logger.error("❌ Failed to restart IB Gateway")
+                if not self._check_data_farm_connection():
+                    logger.error("❌ Data farm connection broken during download - aborting")
+                    return False
 
                 # Download historical bars
                 bars = self.ib_manager.ib.reqHistoricalData(
@@ -367,9 +365,19 @@ class DataDownloader:
                 df = df[['datetime', 'open', 'high', 'low', 'close', 'volume']]
                 df['datetime'] = pd.to_datetime(df['datetime']).dt.strftime('%Y-%m-%d %H:%M:%S')  # type: ignore
 
-                # Save to CSV
-                output_file = self.output_dir / f"{symbol}_{resolution}.csv"
+                # Create organized folder structure: data/csv/resolution/symbol/
+                symbol_dir = self.base_data_dir / 'csv' / resolution / symbol
+                symbol_dir.mkdir(parents=True, exist_ok=True)
+
+                # Save to CSV with date range in filename for clarity
+                date_suffix = f"_{start_date.replace('-', '')}_{end_date.replace('-', '')}"
+                output_file = symbol_dir / f"{symbol}_{resolution}{date_suffix}.csv"
                 df.to_csv(output_file, index=False)
+
+                logger.info(
+                    f"✅ Downloaded {len(df)} bars for {symbol} → {output_file}"
+                )
+                success_count += 1
 
                 logger.info(
                     f"✅ Downloaded {len(df)} bars for {symbol} → {output_file}"
@@ -476,7 +484,20 @@ class DataDownloader:
         Returns:
             bool: True if data passes quality checks
         """
-        output_file = self.output_dir / f"{symbol}_{resolution}.csv"
+        # Find the most recent file for this symbol/resolution
+        symbol_dir = self.base_data_dir / 'csv' / resolution / symbol
+        if not symbol_dir.exists():
+            logger.error(f"Directory not found: {symbol_dir}")
+            return False
+
+        # Find the most recent CSV file (by modification time)
+        csv_files = list(symbol_dir.glob(f"{symbol}_{resolution}_*.csv"))
+        if not csv_files:
+            logger.error(f"No CSV files found for {symbol} {resolution}")
+            return False
+
+        # Use the most recently modified file
+        output_file = max(csv_files, key=lambda f: f.stat().st_mtime)
 
         if not output_file.exists():
             logger.error(f"File not found: {output_file}")
@@ -520,6 +541,43 @@ class DataDownloader:
         except Exception as e:
             logger.error(f"Validation error for {symbol}: {e}")
             return False
+
+    def list_available_data(self) -> None:
+        """
+        List all available data files in the organized structure
+        """
+        csv_dir = self.base_data_dir / 'csv'
+        if not csv_dir.exists():
+            logger.info("No data directory found")
+            return
+
+        logger.info("Available data files:")
+        total_files = 0
+        total_size = 0
+
+        for resolution_dir in sorted(csv_dir.iterdir()):
+            if resolution_dir.is_dir():
+                logger.info(f"\n📁 Resolution: {resolution_dir.name}")
+                res_files = 0
+                res_size = 0
+
+                for symbol_dir in sorted(resolution_dir.iterdir()):
+                    if symbol_dir.is_dir():
+                        files = list(symbol_dir.glob("*.csv"))
+                        if files:
+                            file_sizes = [f.stat().st_size for f in files]
+                            dir_size = sum(file_sizes)
+                            res_files += len(files)
+                            res_size += dir_size
+                            logger.info(f"  📄 {symbol_dir.name}: {len(files)} file(s), {dir_size/1024/1024:.1f} MB")
+
+                if res_files > 0:
+                    logger.info(f"  📊 {resolution_dir.name} total: {res_files} files, {res_size/1024/1024:.1f} MB")
+                    total_files += res_files
+                    total_size += res_size
+
+        if total_files > 0:
+            logger.info(f"\n📈 Grand total: {total_files} files, {total_size/1024/1024:.1f} MB")
 
 
 def main():
@@ -570,11 +628,27 @@ def main():
         action='store_true',
         help='Run data quality validation after download'
     )
+    parser.add_argument(
+        '--client-id',
+        type=int,
+        default=10,
+        help='IB client ID to use (default: 10)'
+    )
+    parser.add_argument(
+        '--list-data',
+        action='store_true',
+        help='List all available data files and exit'
+    )
 
     args = parser.parse_args()
 
     # Create downloader
-    downloader = DataDownloader()
+    downloader = DataDownloader(client_id=args.client_id)
+
+    # Handle list-data command
+    if args.list_data:
+        downloader.list_available_data()
+        sys.exit(0)
 
     try:
         # Connect to IB

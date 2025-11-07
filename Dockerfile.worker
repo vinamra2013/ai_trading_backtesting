@@ -1,18 +1,25 @@
 FROM python:3.12-slim
 
-# Install system dependencies for backtrader
+# Install system dependencies with optimized apt
 RUN apt-get update && apt-get install -y \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Install uv for fast Python package installation
+RUN pip install --no-cache-dir uv
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 # Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --no-cache-dir -r requirements.txt
 
 # Ensure redis is installed (sometimes pip install fails in complex builds)
-RUN pip install --no-cache-dir redis>=4.5.0
+RUN uv pip install --no-cache-dir redis>=4.5.0
 
 # Copy application code
 COPY scripts/ scripts/

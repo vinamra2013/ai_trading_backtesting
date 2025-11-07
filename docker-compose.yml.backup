@@ -176,6 +176,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
+    container_name: backtest-worker
     volumes:
       - ./strategies:/app/strategies:ro
       - ./config:/app/config:ro
@@ -188,15 +189,28 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - LOG_LEVEL=INFO
-    networks:
-      - trading-network
-    depends_on:
-      - redis
-      - mlflow
-    deploy:
-      replicas: 4  # Default to 1 worker, scale up as needed
-    restart: unless-stopped
+       - LOG_LEVEL=INFO
+     networks:
+       - trading-network
+     depends_on:
+       - redis
+       - mlflow
+     deploy:
+       replicas: 1  # Fixed to 1 worker to avoid scaling issues
+     resources:
+       limits:
+         cpus: '1.0'
+         memory: 2G
+       reservations:
+         cpus: '0.5'
+         memory: 1G
+     restart: unless-stopped
+     healthcheck:
+      test: ["CMD", "python", "-c", "import redis; r=redis.Redis('redis',6379); r.ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   trading-network:

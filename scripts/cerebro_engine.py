@@ -185,18 +185,25 @@ class CerebroEngine:
             symbol_dir = data_path / resolution / symbol
             csv_file = None
 
+            print(f"🔍 DEBUG: Looking for data for {symbol} in {resolution} resolution")
+            print(f"🔍 DEBUG: data_path = {data_path} (exists: {data_path.exists()})")
+            print(f"🔍 DEBUG: symbol_dir = {symbol_dir} (exists: {symbol_dir.exists()})")
+
             if symbol_dir.exists():
+                print(f"🔍 DEBUG: Using organized structure")
                 # Find the most recent CSV file for this symbol/resolution
                 csv_files = list(symbol_dir.glob(f"{symbol}_{resolution}_*.csv"))
+                print(f"🔍 DEBUG: Found {len(csv_files)} CSV files: {[str(f) for f in csv_files]}")
                 if csv_files:
                     # Sort by modification time (most recent first)
                     csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
                     csv_file = csv_files[0]
-                else:
-                    print(f"⚠️  Warning: No CSV files found in {symbol_dir}")
+                    print(f"🔍 DEBUG: Selected file: {csv_file} (exists: {csv_file.exists()})")
             else:
+                print(f"🔍 DEBUG: Organized structure not found, trying fallback")
                 # Fallback to old structure: data/csv/symbol_resolution.csv
                 csv_file = data_path / f"{symbol}_{resolution}.csv"
+                print(f"🔍 DEBUG: Fallback file: {csv_file} (exists: {csv_file.exists()})")
                 if not csv_file.exists():
                     csv_file = None
 

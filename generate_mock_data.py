@@ -50,9 +50,23 @@ def generate_mock_data(symbol, start_date, end_date, output_file):
     print(f"Generated {len(df)} rows of mock data for {symbol}")
 
 if __name__ == "__main__":
-    # Generate data with correct naming convention for Backtrader
-    generate_mock_data('SPY', '2020-01-01', '2024-12-31', 'data/csv/SPY_Daily.csv')
-    generate_mock_data('QQQ', '2020-01-01', '2024-12-31', 'data/csv/QQQ_Daily.csv')
-    generate_mock_data('AAPL', '2020-01-01', '2024-12-31', 'data/csv/AAPL_Daily.csv')
-    generate_mock_data('MSFT', '2020-01-01', '2024-12-31', 'data/csv/MSFT_Daily.csv')
-    generate_mock_data('GOOGL', '2020-01-01', '2024-12-31', 'data/csv/GOOGL_Daily.csv')
+    import os
+    from pathlib import Path
+
+    # Generate data with organized folder structure matching download_data.py
+    symbols = ['SPY', 'QQQ', 'AAPL', 'MSFT', 'GOOGL']
+    resolution = 'Daily'
+    start_date = '2020-01-01'
+    end_date = '2024-12-31'
+
+    for symbol in symbols:
+        # Create organized folder structure: data/csv_new/resolution/symbol/
+        symbol_dir = Path(f'data/csv_new/{resolution}/{symbol}')
+        symbol_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save with date range in filename (matching download_data.py format)
+        date_suffix = f"_{start_date.replace('-', '')}_{end_date.replace('-', '')}"
+        output_file = symbol_dir / f"{symbol}_{resolution}{date_suffix}.csv"
+
+        generate_mock_data(symbol, start_date, end_date, str(output_file))
+        print(f"Created: {output_file}")

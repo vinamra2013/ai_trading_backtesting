@@ -45,6 +45,7 @@ class SymbolDiscoveryDB:
         self.db_config = db_config
         self.pool = None
         self._create_connection_pool()
+        self.create_schema()
 
         logger.info("SymbolDiscoveryDB initialized")
 
@@ -120,7 +121,7 @@ class SymbolDiscoveryDB:
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-            UNIQUE(symbol, exchange, scanner_type, discovery_timestamp::date)
+            UNIQUE(symbol, exchange, scanner_type)
         );
 
         -- Scan history table
@@ -190,7 +191,111 @@ class SymbolDiscoveryDB:
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(schema_sql)
+
+            # Execute table creation statements in dependency order
+            table_statements = [
+                # scan_history first (no dependencies)
+                """
+                CREATE TABLE IF NOT EXISTS scan_history (
+                    id SERIAL PRIMARY KEY,
+                    scanner_name VARCHAR(50) NOT NULL,
+                    scanner_type VARCHAR(50) NOT NULL,
+                    start_time TIMESTAMP NOT NULL,
+                    end_time TIMESTAMP,
+                    symbols_discovered INTEGER DEFAULT 0,
+                    symbols_filtered INTEGER DEFAULT 0,
+                    status VARCHAR(20) DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
+                    error_message TEXT,
+                    execution_time_seconds DECIMAL(10,2),
+                    filters_applied JSONB,
+                    performance_metrics JSONB,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                """,
+                # discovered_symbols (references scan_history)
+                """
+                CREATE TABLE IF NOT EXISTS discovered_symbols (
+                    id SERIAL PRIMARY KEY,
+                    symbol VARCHAR(10) NOT NULL,
+                    exchange VARCHAR(20) NOT NULL,
+                    sector VARCHAR(100),
+                    avg_volume BIGINT,
+                    atr DECIMAL(10,4),
+                    price DECIMAL(10,2),
+                    pct_change DECIMAL(8,4),
+                    market_cap BIGINT,
+                    volume BIGINT,
+                    discovery_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    scanner_type VARCHAR(50) NOT NULL,
+                    scan_id INTEGER REFERENCES scan_history(id),
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(symbol, exchange, scanner_type)
+                );
+                """,
+                # symbol_performance (no dependencies)
+                """
+                CREATE TABLE IF NOT EXISTS symbol_performance (
+                    id SERIAL PRIMARY KEY,
+                    symbol VARCHAR(10) NOT NULL,
+                    exchange VARCHAR(20) NOT NULL,
+                    date DATE NOT NULL,
+                    open_price DECIMAL(10,2),
+                    high_price DECIMAL(10,2),
+                    low_price DECIMAL(10,2),
+                    close_price DECIMAL(10,2),
+                    volume BIGINT,
+                    vwap DECIMAL(10,2),
+                    returns DECIMAL(8,4),
+                    volatility DECIMAL(8,4),
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(symbol, exchange, date)
+                );
+                """
+            ]
+
+            # Execute indexes
+            index_statements = [
+                "CREATE INDEX IF NOT EXISTS idx_discovered_symbols_timestamp ON discovered_symbols(discovery_timestamp);",
+                "CREATE INDEX IF NOT EXISTS idx_discovered_symbols_scan_id ON discovered_symbols(scan_id);",
+                "CREATE INDEX IF NOT EXISTS idx_scan_history_name ON scan_history(scanner_name);",
+                "CREATE INDEX IF NOT EXISTS idx_scan_history_status ON scan_history(status);",
+                "CREATE INDEX IF NOT EXISTS idx_scan_history_start_time ON scan_history(start_time);",
+                "CREATE INDEX IF NOT EXISTS idx_symbol_performance_symbol ON symbol_performance(symbol);",
+                "CREATE INDEX IF NOT EXISTS idx_symbol_performance_date ON symbol_performance(date);"
+            ]
+
+            # Execute trigger function and trigger
+            trigger_statements = [
+                """
+                CREATE OR REPLACE FUNCTION update_updated_at_column()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    NEW.updated_at = CURRENT_TIMESTAMP;
+                    RETURN NEW;
+                END;
+                $$ language 'plpgsql';
+                """,
+                "DROP TRIGGER IF EXISTS update_discovered_symbols_updated_at ON discovered_symbols;",
+                """
+                CREATE TRIGGER update_discovered_symbols_updated_at
+                    BEFORE UPDATE ON discovered_symbols
+                    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+                """
+            ]
+
+            all_statements = table_statements + index_statements + trigger_statements
+
+            logger.info(f"Executing {len(all_statements)} SQL statements")
+            for i, statement in enumerate(all_statements):
+                if statement.strip():
+                    logger.info(f"Executing statement {i+1}: {statement.strip()[:50]}...")
+                    try:
+                        cursor.execute(statement)
+                    except Exception as e:
+                        logger.error(f"Failed to execute statement {i+1}: {e}")
+                        logger.error(f"Statement: {statement}")
+                        raise
             conn.commit()
 
         logger.info("✅ Symbol discovery database schema created")
@@ -300,7 +405,7 @@ class SymbolDiscoveryDB:
             symbol, exchange, sector, avg_volume, atr, price, pct_change,
             market_cap, volume, scanner_type, scan_id
         ) VALUES %s
-        ON CONFLICT (symbol, exchange, scanner_type, discovery_timestamp::date)
+        ON CONFLICT (symbol, exchange, scanner_type)
         DO UPDATE SET
             sector = EXCLUDED.sector,
             avg_volume = EXCLUDED.avg_volume,

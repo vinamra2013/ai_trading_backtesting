@@ -8,6 +8,11 @@ pandas>=2.0.0
 numpy>=1.24.0
 PyYAML>=6.0
 
+# Symbol Discovery (Finnhub + Yahoo Finance fallback)
+finnhub-python>=2.4.0
+python-dotenv>=1.0.0
+yfinance>=0.2.0
+
 # Epic 17: MLflow Experiment Tracking
 mlflow>=2.17.1
 psycopg2-binary>=2.9.9
