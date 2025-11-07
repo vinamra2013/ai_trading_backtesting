@@ -301,29 +301,26 @@ This section documents the exact commands The Director uses for autonomous tradi
 
 #### Phase 0: Historical Data Download
 
-**Download Market Data** (Required before backtesting):
-```bash
-# Download data for multiple symbols (uses venv, NOT Docker)
-docker exec -e PYTHONPATH=/app backtrader-engine \
-python scripts/download_data.py \
-  --symbols SPY,QQQ,IWM,DIA,VTI,XLF,XLE,XLK,XLV,XLI,XLU,XLP,XLY,XLB,XLRE,EEM,EFA,FXI,EWJ,EWZ \
-  --start 2020-01-01 \
-  --end 2024-12-31 \
-  --resolution Daily \
-  --data-type Trade
+**Request Data Download** (Required before backtesting):
 
-# Download single symbol
-docker exec -e PYTHONPATH=/app backtrader-engine \
-python scripts/download_data.py \
-  --symbols SPY \
-  --start 2020-01-01 \
-  --end 2024-12-31 \
-  --resolution Daily \
-  --data-type Trade
+**INSTRUCTION**: Let the developer know what data you need in what format and resolution, and they will download it for you.
 
-# Verify downloaded data
-ls -lh data/csv/*.csv
-head data/csv/SPY_Daily.csv
+**Data Request Format**:
+```
+Developer Request:
+Please download historical market data with the following specifications:
+- Symbols: SPY, QQQ, IWM, DIA, VTI, XLF, XLE, XLK, XLV, XLI, XLU, XLP, XLY, XLB, XLRE, EEM, EFA, FXI, EWJ, EWZ
+- Date Range: 2020-01-01 to 2024-12-31
+- Resolution: Daily
+- Data Type: Trade
+- Format: CSV (Backtrader-compatible OHLCV format)
+
+For high-frequency strategies:
+- Symbols: SPY, QQQ, NVDA, TSLA
+- Date Range: 2025-10-01 to 2025-11-30
+- Resolution: 1-minute
+- Data Type: Trade
+- Format: CSV (Databento format with timestamp conversion)
 ```
 
 **Note**: Data download requires:
@@ -332,8 +329,8 @@ head data/csv/SPY_Daily.csv
 - Market data subscriptions for requested symbols
 
 **Troubleshooting**:
-- If IB connection fails: Check `docker compose ps ib-gateway` status
-- If credentials invalid: Verify `.env` file has valid IB paper account credentials
+- If IB connection fails: Request developer to check `docker compose ps ib-gateway` status
+- If credentials invalid: Request developer to verify `.env` file has valid IB paper account credentials
 - If market data unavailable: Request developer to implement alternative data source (Yahoo Finance)
 
 #### Phase 1: Symbol Discovery
@@ -363,13 +360,22 @@ cat data/discovered_symbols/high_volume_*.csv | tail -50
 
 **Single Backtest** (for testing):
 ```bash
-# Test one strategy on one symbol
+# Test one strategy on one symbol (Daily data - default)
 docker exec -e PYTHONPATH=/app backtrader-engine \
   python /app/scripts/run_backtest.py \
   --strategy /app/strategies/sma_crossover.py \
   --symbols AAPL \
   --start 2020-01-01 \
   --end 2024-12-31
+
+# Test one strategy on one symbol (1-minute data)
+docker exec -e PYTHONPATH=/app backtrader-engine \
+  python /app/scripts/run_backtest.py \
+  --strategy /app/strategies/sma_crossover.py \
+  --symbols SPY \
+  --start 2025-10-07 \
+  --end 2025-10-14 \
+  --resolution 1m
 ```
 
 **Batch Backtesting** (for portfolio construction):
@@ -378,7 +384,7 @@ docker exec -e PYTHONPATH=/app backtrader-engine \
 SYMBOLS="AAPL MSFT NVDA GOOGL AMZN WMT KO UNH"
 STRATEGIES="/app/strategies/sma_crossover.py /app/strategies/rsi_momentum.py /app/strategies/macd_crossover.py"
 
-# Run backtests for all combinations (sequential)
+# Run backtests for all combinations (sequential - Daily data)
 for symbol in $SYMBOLS; do
   for strategy in $STRATEGIES; do
     docker exec -e PYTHONPATH=/app backtrader-engine \
@@ -388,6 +394,18 @@ for symbol in $SYMBOLS; do
       --start 2020-01-01 \
       --end 2024-12-31
   done
+done
+
+# Run high-frequency backtests (1-minute data)
+HIGH_FREQ_SYMBOLS="SPY QQQ NVDA TSLA"
+for symbol in $HIGH_FREQ_SYMBOLS; do
+  docker exec -e PYTHONPATH=/app backtrader-engine \
+    python /app/scripts/run_backtest.py \
+    --strategy /app/strategies/sma_crossover.py \
+    --symbols $symbol \
+    --start 2025-10-07 \
+    --end 2025-10-14 \
+    --resolution 1m
 done
 ```
 

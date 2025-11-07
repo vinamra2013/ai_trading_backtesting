@@ -16,7 +16,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List, Type
 from scripts.ib_commissions import load_commission_from_config, get_commission_scheme
-from scripts.backtrader_data_feeds import load_csv_data, load_pandas_data
+from scripts.backtrader_data_feeds import load_csv_data, load_pandas_data, load_databento_data
 
 
 class CerebroEngine:
@@ -122,7 +122,8 @@ class CerebroEngine:
         dataname,
         name: Optional[str] = None,
         fromdate: Optional[datetime] = None,
-        todate: Optional[datetime] = None
+        todate: Optional[datetime] = None,
+        resolution: str = 'Daily'
     ):
         """
         Add data feed to Cerebro
@@ -132,15 +133,27 @@ class CerebroEngine:
             name: Data feed name
             fromdate: Start date filter
             todate: End date filter
+            resolution: Data resolution ('Daily', '1m', etc.)
         """
         # If string, assume CSV file
         if isinstance(dataname, str):
+            # Use standard CSV loader (timestamps have been converted to standard format)
             data = load_csv_data(
                 dataname,
                 fromdate=fromdate,
                 todate=todate,
                 name=name
             )
+
+            # Adjust column mapping for Databento 1-minute data
+            if resolution == '1m':
+                # Databento format: ts_event,rtype,publisher_id,instrument_id,open,high,low,close,volume,symbol
+                # Need OHLCV at positions 4,5,6,7,8 instead of 1,2,3,4,5
+                data.params.open = 4
+                data.params.high = 5
+                data.params.low = 6
+                data.params.close = 7
+                data.params.volume = 8
         # If already a DataFeed, use directly
         elif isinstance(dataname, bt.DataBase):
             data = dataname
@@ -215,7 +228,8 @@ class CerebroEngine:
                 str(csv_file),
                 name=symbol,
                 fromdate=fromdate,
-                todate=todate
+                todate=todate,
+                resolution=resolution
             )
 
     def run(self) -> List:

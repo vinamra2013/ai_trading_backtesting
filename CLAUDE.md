@@ -75,10 +75,8 @@ All Backtrader operations run via Python scripts inside or outside Docker:
 # Test IB connection
 docker exec backtrader-engine python /app/scripts/ib_connection.py
 
-# Download historical data
-source venv/bin/activate
-python scripts/download_data.py \
-  --symbols SPY AAPL --start 2024-01-01 --end 2024-12-31 --validate
+# Download historical data (request from developer)
+# Request: "Please download historical data for SPY, AAPL from 2024-01-01 to 2024-12-31 in Daily resolution"
 
 # Run backtest
 source venv/bin/activate
@@ -94,16 +92,22 @@ source venv/bin/activate
 #### Enable MLflow Logging
 
 ```bash
-# Run inside Docker container
-docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/run_backtest.py \
-  --strategy strategies/sma_crossover.py \
+# Run backtest (Daily data - default)
+source venv/bin/activate
+python scripts/run_backtest.py \
+  --strategy strategies.sma_crossover.SMACrossover \
+  --start 2020-01-01 --end 2024-12-31 \
+  --cash 100000 \
+  --symbols SPY
+
+# Run backtest (1-minute data)
+source venv/bin/activate
+python scripts/run_backtest.py \
+  --strategy strategies.sma_crossover.SMACrossover \
+  --start 2025-10-07 --end 2025-10-14 \
+  --cash 100000 \
   --symbols SPY \
-  --start 2020-01-01 \
-  --end 2024-12-31 \
-  --mlflow \
-  --project Q1_2025 \
-  --asset-class Equities \
-  --strategy-family MeanReversion
+  --resolution 1m
 ```
 
 #### MLflow Features
@@ -147,7 +151,7 @@ Backtests now include:
 **Status**: ✅ Implemented - Optuna-based intelligent optimization with MLflow integration.
 
 ```bash
-# Single-threaded optimization
+# Single-threaded optimization (Daily data)
 docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_strategy.py \
   --strategy strategies/sma_crossover.py \
   --param-space /app/scripts/sma_crossover_params.json \
@@ -157,6 +161,18 @@ docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_st
   --metric sharpe_ratio \
   --n-trials 100 \
   --study-name sma_opt_v1
+
+# High-frequency optimization (1-minute data)
+docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_strategy.py \
+  --strategy strategies/sma_crossover.py \
+  --param-space /app/scripts/sma_crossover_params.json \
+  --symbols SPY \
+  --start 2025-10-07 \
+  --end 2025-10-14 \
+  --resolution 1m \
+  --metric sharpe_ratio \
+  --n-trials 50 \
+  --study-name hf_sma_opt_v1
 
 # Multi-threaded optimization (Optuna parallel)
 docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_strategy.py \
@@ -199,11 +215,20 @@ docker exec backtrader-engine python /app/scripts/optimize_strategy.py \
 **Status**: ✅ Implemented - Redis-based distributed parallel backtesting with unlimited horizontal scaling.
 
 ```bash
-# Run parallel backtest (single strategy, multiple symbols)
+# Run parallel backtest (single strategy, multiple symbols - Daily data)
 docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
   --symbols SPY AAPL MSFT GOOGL AMZN \
   --strategies strategies/sma_crossover.py \
   --strategy-params '{"SPY": {"fast_period": 10, "slow_period": 30}, "AAPL": {"fast_period": 10, "slow_period": 30}}'
+
+# Run high-frequency parallel backtest (1-minute data)
+docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
+  --symbols SPY QQQ NVDA TSLA \
+  --strategies strategies/sma_crossover.py \
+  --strategy-params '{"SPY": {"fast_period": 5, "slow_period": 15}}' \
+  --start 2025-10-07 \
+  --end 2025-10-14 \
+  --resolution 1m
 
 # Run parallel backtest (multiple strategies, multiple symbols)
 docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
@@ -290,32 +315,28 @@ docker exec backtrader-engine python /app/scripts/portfolio_analytics.py \
 **Status**: ✅ Implemented - Rolling window out-of-sample validation with distributed parallel execution.
 
 ```bash
-# Enhanced walk-forward analysis with parallel backtesting
-docker exec backtrader-engine python /app/scripts/walk_forward_analyzer_enhanced.py \
+# Run inside Docker container (Daily data)
+docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/run_backtest.py \
   --strategy strategies/sma_crossover.py \
-  --symbols SPY AAPL MSFT \
+  --symbols SPY \
   --start 2020-01-01 \
   --end 2024-12-31 \
-  --window-size 12 \
-  --step-size 3 \
-  --optimization-metric sharpe_ratio
+  --mlflow \
+  --project Q1_2025 \
+  --asset-class Equities \
+  --strategy-family MeanReversion
 
-# Quick walk-forward test (shorter time period)
-docker exec backtrader-engine python /app/scripts/walk_forward_analyzer_enhanced.py \
+# Run high-frequency backtest (1-minute data)
+docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/run_backtest.py \
   --strategy strategies/sma_crossover.py \
   --symbols SPY \
-  --start 2023-01-01 \
-  --end 2024-12-31 \
-  --window-size 6 \
-  --step-size 6
-
-# Custom MLflow project tagging
-docker exec backtrader-engine python /app/scripts/walk_forward_analyzer_enhanced.py \
-  --strategy strategies/my_strategy.py \
-  --symbols SPY \
+  --start 2025-10-07 \
+  --end 2025-10-14 \
+  --resolution 1m \
+  --mlflow \
   --project Q1_2025 \
-  --asset-class equities \
-  --strategy-family mean_reversion
+  --asset-class Equities \
+  --strategy-family HighFrequency
 ```
 
 **Features**:
@@ -414,16 +435,35 @@ comparison = pm.compare_strategies("Q1_2025", "sharpe_ratio")
 
 ### Download Historical Data
 
-Use [scripts/download_data.py](scripts/download_data.py) for data downloads via ib_insync:
+**Data Download Process**: Let the developer know what data you need in what format and resolution, and they will download it for you using the data download scripts.
 
-```bash
-source venv/bin/activate
-python scripts/download_data.py --symbols SPY AAPL \
-  --start 2020-01-01 --end 2024-12-31 \
-  --resolution Daily --data-type Trade
+**Data Request Format**:
+```
+Developer Request:
+Please download historical market data with the following specifications:
+- Symbols: [list your required symbols]
+- Date Range: [start date] to [end date]
+- Resolution: Daily / 1m / 5m / 15m / 1h
+- Data Type: Trade / Quote
+- Format: CSV (Backtrader-compatible OHLCV format)
+- Special Requirements: [any specific formatting needs]
+
+Example for daily data:
+- Symbols: SPY, AAPL, MSFT, GOOGL, AMZN
+- Date Range: 2020-01-01 to 2024-12-31
+- Resolution: Daily
+- Data Type: Trade
+- Format: CSV (Backtrader-compatible OHLCV format)
+
+Example for high-frequency data:
+- Symbols: SPY, QQQ, NVDA, TSLA
+- Date Range: 2025-10-01 to 2025-11-30
+- Resolution: 1m
+- Data Type: Trade
+- Format: CSV (Databento format with timestamp conversion)
 ```
 
-The script:
+The data download process:
 - Requires IB credentials in `.env` file
 - Connects to IB Gateway via ib_insync
 - Downloads data directly from Interactive Brokers
@@ -938,7 +978,7 @@ This platform was migrated from QuantConnect LEAN to Backtrader in November 2025
 **Command Changes**:
 - `lean backtest` → `python scripts/run_backtest.py`
 - `lean live deploy` → `./scripts/start_live_trading.sh`
-- `lean data download` → `python scripts/download_data.py`
+- `lean data download` → Request developer to download data (specify requirements)
 
 **Benefits**:
 - ✅ Zero vendor lock-in (100% open-source)
@@ -1005,9 +1045,11 @@ python scripts/run_backtest.py --strategy strategies.my_strategy.MyStrategy --sy
 
 **Quick Reference Card**:
 - Start services: `./scripts/start.sh`
-- Download data: `python scripts/download_data.py --symbols SPY --start 2020-01-01 --end 2024-12-31`
+- Download data: Request developer to download data (specify symbols, dates, resolution, format)
+- Download 1-min data: Request developer to download 1-minute data (specify symbols, date range)
 - Symbol discovery: `python scripts/symbol_discovery.py --scanner high_volume --output csv`
-- Run backtest: `python scripts/run_backtest.py --strategy strategies.sma_crossover.SMACrossover --symbols SPY --start 2020-01-01 --end 2024-12-31`
+- Run backtest (Daily): `python scripts/run_backtest.py --strategy strategies.sma_crossover.SMACrossover --symbols SPY --start 2020-01-01 --end 2024-12-31`
+- Run backtest (1-min): `docker exec backtrader-engine python /app/scripts/run_backtest.py --strategy strategies.sma_crossover.py --symbols SPY --start 2025-10-07 --end 2025-10-14 --resolution 1m`
 - Strategy ranking: `docker exec backtrader-engine python /app/scripts/strategy_ranker.py --csv-input results/parallel_backtests.csv --output rankings.csv --top-n 15`
 - Portfolio optimization: `docker exec backtrader-engine python /app/scripts/portfolio_optimizer.py --strategies rankings.csv --output portfolio_allocation.csv --method equal_weight`
 - Live trading: `./scripts/start_live_trading.sh`

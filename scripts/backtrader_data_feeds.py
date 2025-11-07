@@ -37,6 +37,40 @@ class IBCSVData(bt.feeds.GenericCSVData):
     )
 
 
+class DatabentoCSVData(bt.feeds.GenericCSVData):
+    """
+    Custom CSV data feed for Databento 1-minute OHLCV data
+
+    Assumes CSV format from Databento:
+    ts_event,rtype,publisher_id,instrument_id,open,high,low,close,volume,symbol
+    """
+
+    params = (
+        ('dtformat', '%Y-%m-%dT%H:%M:%S.%fZ'),  # ISO format with microseconds and Z timezone
+        ('datetime', 0),      # ts_event column
+        ('open', 4),          # open column
+        ('high', 5),          # high column
+        ('low', 6),           # low column
+        ('close', 7),         # close column
+        ('volume', 8),        # volume column
+        ('openinterest', -1), # Not provided
+    )
+
+    def _loadline(self, linetokens):
+        """
+        Override to handle Databento timestamp format with variable microsecond precision
+        """
+        # Handle the timestamp format - Databento uses 9 digits for microseconds
+        # but Python strptime expects 1-6. We'll truncate to 6 digits.
+        if len(linetokens) > 0:
+            ts_str = linetokens[0]
+            # Replace .000000000Z with .000000Z to match %f format
+            if ts_str.endswith('.000000000Z'):
+                linetokens[0] = ts_str.replace('.000000000Z', '.000000Z')
+
+        return super()._loadline(linetokens)
+
+
 class IBPandasData(bt.feeds.PandasData):
     """
     Pandas DataFrame data feed for IB data
@@ -196,6 +230,37 @@ def load_csv_data(
         raise FileNotFoundError(f"CSV file not found: {filepath}")
 
     data = IBCSVData(
+        dataname=filepath,
+        fromdate=fromdate,
+        todate=todate,
+        name=name or os.path.basename(filepath)
+    )
+
+    return data
+
+
+def load_databento_data(
+    filepath: str,
+    fromdate: Optional[datetime] = None,
+    todate: Optional[datetime] = None,
+    name: str = None
+) -> DatabentoCSVData:
+    """
+    Load Databento CSV data file into Backtrader feed
+
+    Args:
+        filepath: Path to Databento CSV file
+        fromdate: Start date filter
+        todate: End date filter
+        name: Data feed name
+
+    Returns:
+        DatabentoCSVData: Configured data feed
+    """
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Databento CSV file not found: {filepath}")
+
+    data = DatabentoCSVData(
         dataname=filepath,
         fromdate=fromdate,
         todate=todate,
