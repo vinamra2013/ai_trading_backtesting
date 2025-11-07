@@ -16,7 +16,11 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List, Type
 from scripts.ib_commissions import load_commission_from_config, get_commission_scheme
-from scripts.backtrader_data_feeds import load_csv_data, load_pandas_data, load_databento_data
+from scripts.backtrader_data_feeds import (
+    load_csv_data,
+    load_pandas_data,
+    load_databento_data,
+)
 
 
 class CerebroEngine:
@@ -24,7 +28,7 @@ class CerebroEngine:
     Backtrader Cerebro engine wrapper with YAML configuration support
     """
 
-    def __init__(self, config_path: str = 'config/backtest_config.yaml'):
+    def __init__(self, config_path: str = "config/backtest_config.yaml"):
         """
         Initialize Cerebro engine
 
@@ -56,57 +60,52 @@ class CerebroEngine:
         if not config_file.exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
 
-        with open(config_file, 'r') as f:
+        with open(config_file, "r") as f:
             config = yaml.safe_load(f)
 
         return config
 
     def _configure_broker(self):
         """Configure broker settings from config"""
-        broker_config = self.config.get('broker', {})
+        broker_config = self.config.get("broker", {})
 
         # Set initial cash
-        initial_cash = broker_config.get('cash', 100000)
+        initial_cash = broker_config.get("cash", 100000)
         self.cerebro.broker.set_cash(initial_cash)
 
         # Set commission scheme
-        commission_scheme = broker_config.get('commission_scheme', 'ib_standard')
+        commission_scheme = broker_config.get("commission_scheme", "ib_standard")
         commission = get_commission_scheme(commission_scheme)
         self.cerebro.broker.addcommissioninfo(commission)
 
         # Set slippage (if configured)
-        slippage_perc = broker_config.get('slippage_perc', 0)
+        slippage_perc = broker_config.get("slippage_perc", 0)
         if slippage_perc > 0:
             self.cerebro.broker.set_slippage_perc(slippage_perc)
 
     def _configure_analyzers(self):
         """Add analyzers from config"""
-        analyzer_names = self.config.get('analyzers', [])
+        analyzer_names = self.config.get("analyzers", [])
 
         # Map analyzer names to Backtrader analyzer classes
         analyzer_map = {
-            'SharpeRatio': bt.analyzers.SharpeRatio,
-            'DrawDown': bt.analyzers.DrawDown,
-            'Returns': bt.analyzers.Returns,
-            'TradeAnalyzer': bt.analyzers.TradeAnalyzer,
-            'TimeReturn': bt.analyzers.TimeReturn,
-            'SQN': bt.analyzers.SQN,  # System Quality Number
-            'VWR': bt.analyzers.VWR,  # Variability-Weighted Return
-            'Transactions': bt.analyzers.Transactions,
+            "SharpeRatio": bt.analyzers.SharpeRatio,
+            "DrawDown": bt.analyzers.DrawDown,
+            "Returns": bt.analyzers.Returns,
+            "TradeAnalyzer": bt.analyzers.TradeAnalyzer,
+            "TimeReturn": bt.analyzers.TimeReturn,
+            "SQN": bt.analyzers.SQN,  # System Quality Number
+            "VWR": bt.analyzers.VWR,  # Variability-Weighted Return
+            "Transactions": bt.analyzers.Transactions,
         }
 
         for analyzer_name in analyzer_names:
             if analyzer_name in analyzer_map:
                 self.cerebro.addanalyzer(
-                    analyzer_map[analyzer_name],
-                    _name=analyzer_name.lower()
+                    analyzer_map[analyzer_name], _name=analyzer_name.lower()
                 )
 
-    def add_strategy(
-        self,
-        strategy_class: Type[bt.Strategy],
-        **params
-    ):
+    def add_strategy(self, strategy_class: Type[bt.Strategy], **params):
         """
         Add strategy to Cerebro
 
@@ -123,7 +122,7 @@ class CerebroEngine:
         name: Optional[str] = None,
         fromdate: Optional[datetime] = None,
         todate: Optional[datetime] = None,
-        resolution: str = 'Daily'
+        resolution: str = "Daily",
     ):
         """
         Add data feed to Cerebro
@@ -138,15 +137,10 @@ class CerebroEngine:
         # If string, assume CSV file
         if isinstance(dataname, str):
             # Use standard CSV loader (timestamps have been converted to standard format)
-            data = load_csv_data(
-                dataname,
-                fromdate=fromdate,
-                todate=todate,
-                name=name
-            )
+            data = load_csv_data(dataname, fromdate=fromdate, todate=todate, name=name)
 
             # Adjust column mapping for Databento 1-minute data
-            if resolution == '1m':
+            if resolution == "1m":
                 # Databento format: ts_event,rtype,publisher_id,instrument_id,open,high,low,close,volume,symbol
                 # Need OHLCV at positions 4,5,6,7,8 instead of 1,2,3,4,5
                 data.params.open = 4
@@ -161,26 +155,98 @@ class CerebroEngine:
             # Try to load as pandas DataFrame
             try:
                 data = load_pandas_data(
-                    dataname,
-                    fromdate=fromdate,
-                    todate=todate,
-                    name=name
+                    dataname, fromdate=fromdate, todate=todate, name=name
                 )
             except:
                 raise ValueError(f"Unsupported data type: {type(dataname)}")
 
         self.cerebro.adddata(data)
 
+    def _strategy_needs_market_data(self, strategy_class: Type[bt.Strategy]) -> bool:
+        """
+        Detect if strategy needs market data (SPY/VIX) based on class attributes
+
+        Args:
+            strategy_class: The strategy class to check
+
+        Returns:
+            bool: True if strategy needs market data
+        """
+        # Check strategy name or parameters for market data requirements
+        strategy_name = strategy_class.__name__.lower()
+
+        # Known strategies that need market data
+        market_data_strategies = ["varm_rsi", "varmrsi"]
+
+        # Check if strategy has market filter parameters
+        if hasattr(strategy_class, "params"):
+            param_names = [p[0] for p in strategy_class.params]
+            if any(
+                "spy" in param.lower() or "vix" in param.lower()
+                for param in param_names
+            ):
+                return True
+
+        return strategy_name in market_data_strategies
+
+    def _load_market_data(
+        self,
+        data_dir: str,
+        fromdate: Optional[datetime] = None,
+        todate: Optional[datetime] = None,
+    ):
+        """
+        Load market data feeds (SPY, VIX) if available
+
+        Args:
+            data_dir: Base data directory
+            fromdate: Start date filter
+            todate: End date filter
+        """
+        data_path = Path(data_dir)
+
+        # Market symbols to load
+        market_symbols = ["SPY", "VIX"]
+
+        for symbol in market_symbols:
+            # Look for daily data for market symbols
+            symbol_dir = data_path / "Daily" / symbol
+            csv_file = None
+
+            if symbol_dir.exists():
+                # Find the most recent CSV file
+                csv_files = list(symbol_dir.glob(f"{symbol}_Daily_*.csv"))
+                if csv_files:
+                    csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                    csv_file = csv_files[0]
+
+            # Fallback to old structure
+            if csv_file is None or not csv_file.exists():
+                csv_file = data_path / f"{symbol}_Daily.csv"
+                if not csv_file.exists():
+                    print(f"⚠️  Market data not found for {symbol}, skipping")
+                    continue
+
+            print(f"📊 Loading market data: {symbol}")
+            self.add_data(
+                str(csv_file),
+                name=f"{symbol}_daily",
+                fromdate=fromdate,
+                todate=todate,
+                resolution="Daily",
+            )
+
     def add_multiple_data(
         self,
         symbols: List[str],
         data_dir: Optional[str] = None,
-        resolution: str = 'Daily',
+        resolution: str = "Daily",
         fromdate: Optional[datetime] = None,
-        todate: Optional[datetime] = None
+        todate: Optional[datetime] = None,
+        strategy_class: Optional[Type[bt.Strategy]] = None,
     ):
         """
-        Add multiple CSV data feeds
+        Add multiple CSV data feeds with optional market data loading
 
         Args:
             symbols: List of stock symbols
@@ -188,40 +254,50 @@ class CerebroEngine:
             resolution: Data resolution (for filename)
             fromdate: Start date filter
             todate: End date filter
+            strategy_class: Strategy class to check for market data requirements
         """
         if data_dir is None:
-            data_dir = self.config.get('data', {}).get('data_dir', '/app/data/csv')
+            data_dir = self.config.get("data", {}).get("data_dir", "/app/data/csv")
         data_path = Path(str(data_dir))
+
+        # Load market data first if strategy needs it
+        if strategy_class and self._strategy_needs_market_data(strategy_class):
+            print("🌍 Strategy requires market data, loading SPY/VIX...")
+            self._load_market_data(str(data_path), fromdate, todate)
 
         for symbol in symbols:
             # Try the organized structure first: data/csv/resolution/symbol/
             symbol_dir = data_path / resolution / symbol
             csv_file = None
 
-            print(f"🔍 DEBUG: Looking for data for {symbol} in {resolution} resolution")
-            print(f"🔍 DEBUG: data_path = {data_path} (exists: {data_path.exists()})")
-            print(f"🔍 DEBUG: symbol_dir = {symbol_dir} (exists: {symbol_dir.exists()})")
+            print(f"🔍 Looking for data for {symbol} in {resolution} resolution")
+            print(f"   data_path = {data_path} (exists: {data_path.exists()})")
+            print(f"   symbol_dir = {symbol_dir} (exists: {symbol_dir.exists()})")
 
             if symbol_dir.exists():
-                print(f"🔍 DEBUG: Using organized structure")
+                print(f"   Using organized structure")
                 # Find the most recent CSV file for this symbol/resolution
                 csv_files = list(symbol_dir.glob(f"{symbol}_{resolution}_*.csv"))
-                print(f"🔍 DEBUG: Found {len(csv_files)} CSV files: {[str(f) for f in csv_files]}")
+                print(
+                    f"   Found {len(csv_files)} CSV files: {[str(f) for f in csv_files]}"
+                )
                 if csv_files:
                     # Sort by modification time (most recent first)
                     csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
                     csv_file = csv_files[0]
-                    print(f"🔍 DEBUG: Selected file: {csv_file} (exists: {csv_file.exists()})")
+                    print(f"   Selected file: {csv_file} (exists: {csv_file.exists()})")
             else:
-                print(f"🔍 DEBUG: Organized structure not found, trying fallback")
+                print(f"   Organized structure not found, trying fallback")
                 # Fallback to old structure: data/csv/symbol_resolution.csv
                 csv_file = data_path / f"{symbol}_{resolution}.csv"
-                print(f"🔍 DEBUG: Fallback file: {csv_file} (exists: {csv_file.exists()})")
+                print(f"   Fallback file: {csv_file} (exists: {csv_file.exists()})")
                 if not csv_file.exists():
                     csv_file = None
 
             if csv_file is None or not csv_file.exists():
-                print(f"⚠️  Warning: Data file not found for {symbol} in {resolution} resolution")
+                print(
+                    f"⚠️  Warning: Data file not found for {symbol} in {resolution} resolution"
+                )
                 continue
 
             self.add_data(
@@ -229,7 +305,7 @@ class CerebroEngine:
                 name=symbol,
                 fromdate=fromdate,
                 todate=todate,
-                resolution=resolution
+                resolution=resolution,
             )
 
     def run(self) -> List:
@@ -239,16 +315,16 @@ class CerebroEngine:
         Returns:
             List: Strategy instances with results
         """
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"STARTING BACKTEST")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"Initial Portfolio Value: ${self.cerebro.broker.getvalue():,.2f}")
 
         self.results = self.cerebro.run()
 
         final_value = self.cerebro.broker.getvalue()
         print(f"\nFinal Portfolio Value: ${final_value:,.2f}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         return self.results
 
@@ -287,7 +363,7 @@ class CerebroEngine:
         strategy = self.results[0]
 
         # Check if TradeAnalyzer was added
-        if not hasattr(strategy.analyzers, 'tradeanalyzer'):
+        if not hasattr(strategy.analyzers, "tradeanalyzer"):
             return []
 
         trade_analysis = strategy.analyzers.tradeanalyzer.get_analysis()
@@ -308,10 +384,10 @@ class CerebroEngine:
         """
         # Default plot settings
         plot_config = {
-            'style': 'candlestick',
-            'barup': 'green',
-            'bardown': 'red',
-            'volume': True,
+            "style": "candlestick",
+            "barup": "green",
+            "bardown": "red",
+            "volume": True,
         }
         plot_config.update(kwargs)
 
@@ -328,44 +404,46 @@ class CerebroEngine:
             raise ValueError("No results available. Run backtest first.")
 
         analysis = self.get_analyzer_results()
-        initial_value = self.config.get('broker', {}).get('cash', 100000)
+        initial_value = self.config.get("broker", {}).get("cash", 100000)
         final_value = self.cerebro.broker.getvalue()
 
         summary = {
-            'initial_value': initial_value,
-            'final_value': final_value,
-            'total_return': final_value - initial_value,
-            'total_return_pct': ((final_value / initial_value) - 1) * 100,
-            'sharpe_ratio': None,
-            'max_drawdown': None,
-            'max_drawdown_pct': None,
-            'trade_count': 0,
-            'win_rate': 0,
+            "initial_value": initial_value,
+            "final_value": final_value,
+            "total_return": final_value - initial_value,
+            "total_return_pct": ((final_value / initial_value) - 1) * 100,
+            "sharpe_ratio": None,
+            "max_drawdown": None,
+            "max_drawdown_pct": None,
+            "trade_count": 0,
+            "win_rate": 0,
         }
 
         # Extract Sharpe Ratio
-        if 'sharperatio' in analysis and analysis['sharperatio']:
-            summary['sharpe_ratio'] = analysis['sharperatio'].get('sharperatio', None)
+        if "sharperatio" in analysis and analysis["sharperatio"]:
+            summary["sharpe_ratio"] = analysis["sharperatio"].get("sharperatio", None)
 
         # Extract Drawdown
-        if 'drawdown' in analysis and analysis['drawdown']:
-            dd = analysis['drawdown']
-            summary['max_drawdown'] = dd.get('max', {}).get('drawdown', None)
-            summary['max_drawdown_pct'] = dd.get('max', {}).get('drawdown', None)
+        if "drawdown" in analysis and analysis["drawdown"]:
+            dd = analysis["drawdown"]
+            summary["max_drawdown"] = dd.get("max", {}).get("drawdown", None)
+            summary["max_drawdown_pct"] = dd.get("max", {}).get("drawdown", None)
 
         # Extract Trade Stats
-        if 'tradeanalyzer' in analysis and analysis['tradeanalyzer']:
-            ta = analysis['tradeanalyzer']
-            total_trades = ta.get('total', {}).get('total', 0)
-            won_trades = ta.get('won', {}).get('total', 0)
+        if "tradeanalyzer" in analysis and analysis["tradeanalyzer"]:
+            ta = analysis["tradeanalyzer"]
+            total_trades = ta.get("total", {}).get("total", 0)
+            won_trades = ta.get("won", {}).get("total", 0)
 
-            summary['trade_count'] = total_trades
-            summary['win_rate'] = (won_trades / total_trades * 100) if total_trades > 0 else 0
+            summary["trade_count"] = total_trades
+            summary["win_rate"] = (
+                (won_trades / total_trades * 100) if total_trades > 0 else 0
+            )
 
         return summary
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     """Test Cerebro engine setup"""
     print("Testing Cerebro Engine...\n")
 
@@ -376,7 +454,9 @@ if __name__ == '__main__':
         print("✅ Cerebro engine initialized")
         print(f"   Initial Cash: ${engine.cerebro.broker.getvalue():,.2f}")
         print(f"   Analyzers: {list(engine.config.get('analyzers', []))}")
-        print(f"   Commission Scheme: {engine.config.get('broker', {}).get('commission_scheme', 'ib_standard')}")
+        print(
+            f"   Commission Scheme: {engine.config.get('broker', {}).get('commission_scheme', 'ib_standard')}"
+        )
 
         print("\n✅ Cerebro engine tested successfully!")
 
