@@ -26,49 +26,35 @@ class IBCSVData(bt.feeds.GenericCSVData):
     """
 
     params = (
-        ('dtformat', '%Y-%m-%d %H:%M:%S'),
-        ('datetime', 0),
-        ('open', 1),
-        ('high', 2),
-        ('low', 3),
-        ('close', 4),
-        ('volume', 5),
-        ('openinterest', -1),  # Not provided by IB
+        ("dtformat", "%Y-%m-%d %H:%M:%S"),
+        ("datetime", 0),
+        ("open", 1),
+        ("high", 2),
+        ("low", 3),
+        ("close", 4),
+        ("volume", 5),
+        ("openinterest", -1),  # Not provided by IB
     )
 
 
 class DatabentoCSVData(bt.feeds.GenericCSVData):
     """
-    Custom CSV data feed for Databento 1-minute OHLCV data
+    Custom CSV data feed for processed Databento 1-minute OHLCV data
 
-    Assumes CSV format from Databento:
+    Assumes CSV format from processed Databento data:
     ts_event,rtype,publisher_id,instrument_id,open,high,low,close,volume,symbol
     """
 
     params = (
-        ('dtformat', '%Y-%m-%dT%H:%M:%S.%fZ'),  # ISO format with microseconds and Z timezone
-        ('datetime', 0),      # ts_event column
-        ('open', 4),          # open column
-        ('high', 5),          # high column
-        ('low', 6),           # low column
-        ('close', 7),         # close column
-        ('volume', 8),        # volume column
-        ('openinterest', -1), # Not provided
+        ("dtformat", "%Y-%m-%d %H:%M:%S"),  # Processed format: 2020-11-09 09:00:00
+        ("datetime", 0),  # ts_event column
+        ("open", 4),  # open column
+        ("high", 5),  # high column
+        ("low", 6),  # low column
+        ("close", 7),  # close column
+        ("volume", 8),  # volume column
+        ("openinterest", -1),  # Not provided
     )
-
-    def _loadline(self, linetokens):
-        """
-        Override to handle Databento timestamp format with variable microsecond precision
-        """
-        # Handle the timestamp format - Databento uses 9 digits for microseconds
-        # but Python strptime expects 1-6. We'll truncate to 6 digits.
-        if len(linetokens) > 0:
-            ts_str = linetokens[0]
-            # Replace .000000000Z with .000000Z to match %f format
-            if ts_str.endswith('.000000000Z'):
-                linetokens[0] = ts_str.replace('.000000000Z', '.000000Z')
-
-        return super()._loadline(linetokens)
 
 
 class IBPandasData(bt.feeds.PandasData):
@@ -81,13 +67,13 @@ class IBPandasData(bt.feeds.PandasData):
     """
 
     params = (
-        ('datetime', None),  # Use index
-        ('open', 'open'),
-        ('high', 'high'),
-        ('low', 'low'),
-        ('close', 'close'),
-        ('volume', 'volume'),
-        ('openinterest', None),
+        ("datetime", None),  # Use index
+        ("open", "open"),
+        ("high", "high"),
+        ("low", "low"),
+        ("close", "close"),
+        ("volume", "volume"),
+        ("openinterest", None),
     )
 
 
@@ -99,15 +85,15 @@ class IBLiveData(bt.DataBase):
     """
 
     params = (
-        ('symbol', ''),
-        ('exchange', 'SMART'),
-        ('currency', 'USD'),
-        ('sectype', 'STK'),  # Stock
-        ('host', 'ib-gateway'),
-        ('port', 4001),
-        ('client_id', 1),
-        ('timeframe', bt.TimeFrame.Ticks),  # Ticks, Minutes, Days
-        ('compression', 1),
+        ("symbol", ""),
+        ("exchange", "SMART"),
+        ("currency", "USD"),
+        ("sectype", "STK"),  # Stock
+        ("host", "ib-gateway"),
+        ("port", 4001),
+        ("client_id", 1),
+        ("timeframe", bt.TimeFrame.Ticks),  # Ticks, Minutes, Days
+        ("compression", 1),
     )
 
     def __init__(self):
@@ -127,17 +113,17 @@ class IBLiveData(bt.DataBase):
             host=self.p.host,
             port=self.p.port,
             client_id=self.p.client_id,
-            readonly=True  # Read-only for data feeds
+            readonly=True,  # Read-only for data feeds
         )
 
         if not self.ib_manager.connect():
-            raise ConnectionError(f"Failed to connect to IB for live data: {self.p.symbol}")
+            raise ConnectionError(
+                f"Failed to connect to IB for live data: {self.p.symbol}"
+            )
 
         # Create contract
         self.contract = Stock(
-            symbol=self.p.symbol,
-            exchange=self.p.exchange,
-            currency=self.p.currency
+            symbol=self.p.symbol, exchange=self.p.exchange, currency=self.p.currency
         )
 
         # Qualify contract
@@ -148,7 +134,7 @@ class IBLiveData(bt.DataBase):
         self.contract = qualified[0]
 
         # Subscribe to market data
-        self.ib_manager.ib.reqMktData(self.contract, '', False, False)
+        self.ib_manager.ib.reqMktData(self.contract, "", False, False)
 
         self.live = True
 
@@ -212,7 +198,7 @@ def load_csv_data(
     filepath: str,
     fromdate: Optional[datetime] = None,
     todate: Optional[datetime] = None,
-    name: str = None
+    name: str = None,
 ) -> IBCSVData:
     """
     Load CSV data file into Backtrader feed
@@ -233,7 +219,7 @@ def load_csv_data(
         dataname=filepath,
         fromdate=fromdate,
         todate=todate,
-        name=name or os.path.basename(filepath)
+        name=name or os.path.basename(filepath),
     )
 
     return data
@@ -243,7 +229,7 @@ def load_databento_data(
     filepath: str,
     fromdate: Optional[datetime] = None,
     todate: Optional[datetime] = None,
-    name: str = None
+    name: str = None,
 ) -> DatabentoCSVData:
     """
     Load Databento CSV data file into Backtrader feed
@@ -264,7 +250,7 @@ def load_databento_data(
         dataname=filepath,
         fromdate=fromdate,
         todate=todate,
-        name=name or os.path.basename(filepath)
+        name=name or os.path.basename(filepath),
     )
 
     return data
@@ -274,7 +260,7 @@ def load_pandas_data(
     df: pd.DataFrame,
     fromdate: Optional[datetime] = None,
     todate: Optional[datetime] = None,
-    name: str = None
+    name: str = None,
 ) -> IBPandasData:
     """
     Load Pandas DataFrame into Backtrader feed
@@ -291,16 +277,13 @@ def load_pandas_data(
     if not isinstance(df.index, pd.DatetimeIndex):
         raise ValueError("DataFrame must have DatetimeIndex")
 
-    required_cols = ['open', 'high', 'low', 'close', 'volume']
+    required_cols = ["open", "high", "low", "close", "volume"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
         raise ValueError(f"DataFrame missing required columns: {missing_cols}")
 
     data = IBPandasData(
-        dataname=df,
-        fromdate=fromdate,
-        todate=todate,
-        name=name or 'pandas_data'
+        dataname=df, fromdate=fromdate, todate=todate, name=name or "pandas_data"
     )
 
     return data
@@ -308,11 +291,11 @@ def load_pandas_data(
 
 def create_live_feed(
     symbol: str,
-    exchange: str = 'SMART',
-    currency: str = 'USD',
-    host: str = 'ib-gateway',
+    exchange: str = "SMART",
+    currency: str = "USD",
+    host: str = "ib-gateway",
     port: int = 4001,
-    client_id: int = 1
+    client_id: int = 1,
 ) -> IBLiveData:
     """
     Create live IB data feed
@@ -334,18 +317,18 @@ def create_live_feed(
         currency=currency,
         host=host,
         port=port,
-        client_id=client_id
+        client_id=client_id,
     )
 
     return data
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     """Test data feeds"""
     print("Testing Backtrader Data Feeds...")
 
     # Test CSV loading (if file exists)
-    test_csv = '/app/data/csv/SPY_Daily.csv'
+    test_csv = "/app/data/csv/SPY_Daily.csv"
     if os.path.exists(test_csv):
         print(f"\n✅ Loading CSV: {test_csv}")
         data = load_csv_data(test_csv)
@@ -355,15 +338,18 @@ if __name__ == '__main__':
 
     # Test Pandas loading
     print(f"\n✅ Creating test Pandas DataFrame...")
-    test_df = pd.DataFrame({
-        'open': [100.0, 101.0, 102.0],
-        'high': [101.0, 102.0, 103.0],
-        'low': [99.0, 100.0, 101.0],
-        'close': [100.5, 101.5, 102.5],
-        'volume': [1000000, 1100000, 1200000]
-    }, index=pd.date_range('2024-01-01', periods=3, freq='D'))
+    test_df = pd.DataFrame(
+        {
+            "open": [100.0, 101.0, 102.0],
+            "high": [101.0, 102.0, 103.0],
+            "low": [99.0, 100.0, 101.0],
+            "close": [100.5, 101.5, 102.5],
+            "volume": [1000000, 1100000, 1200000],
+        },
+        index=pd.date_range("2024-01-01", periods=3, freq="D"),
+    )
 
-    data = load_pandas_data(test_df, name='TEST')
+    data = load_pandas_data(test_df, name="TEST")
     print(f"   Data feed created: {data._name}")
 
     print("\n✅ Data feeds tested successfully!")

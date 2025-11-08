@@ -21,6 +21,7 @@ from scripts.backtrader_data_feeds import (
     load_pandas_data,
     load_databento_data,
 )
+from utils.data_cache import get_or_build_resampled_csv
 
 
 class CerebroEngine:
@@ -136,18 +137,14 @@ class CerebroEngine:
         """
         # If string, assume CSV file
         if isinstance(dataname, str):
-            # Use standard CSV loader (timestamps have been converted to standard format)
-            data = load_csv_data(dataname, fromdate=fromdate, todate=todate, name=name)
-
-            # Adjust column mapping for Databento 1-minute data
             if resolution == "1m":
-                # Databento format: ts_event,rtype,publisher_id,instrument_id,open,high,low,close,volume,symbol
-                # Need OHLCV at positions 4,5,6,7,8 instead of 1,2,3,4,5
-                data.params.open = 4
-                data.params.high = 5
-                data.params.low = 6
-                data.params.close = 7
-                data.params.volume = 8
+                data = load_databento_data(
+                    dataname, fromdate=fromdate, todate=todate, name=name or "data"
+                )
+            else:
+                data = load_csv_data(
+                    dataname, fromdate=fromdate, todate=todate, name=name or "data"
+                )
         # If already a DataFeed, use directly
         elif isinstance(dataname, bt.DataBase):
             data = dataname
@@ -155,7 +152,7 @@ class CerebroEngine:
             # Try to load as pandas DataFrame
             try:
                 data = load_pandas_data(
-                    dataname, fromdate=fromdate, todate=todate, name=name
+                    dataname, fromdate=fromdate, todate=todate, name=name or "data"
                 )
             except:
                 raise ValueError(f"Unsupported data type: {type(dataname)}")
@@ -180,14 +177,57 @@ class CerebroEngine:
 
         # Check if strategy has market filter parameters
         if hasattr(strategy_class, "params"):
-            param_names = [p[0] for p in strategy_class.params]
-            if any(
-                "spy" in param.lower() or "vix" in param.lower()
-                for param in param_names
-            ):
-                return True
+            try:
+                params = getattr(strategy_class, "params", ())
+                if isinstance(params, (tuple, list)):
+                    param_names = [
+                        p[0] if isinstance(p, (tuple, list)) and len(p) > 0 else str(p)
+                        for p in params
+                    ]
+                    if any(
+                        "spy" in param.lower() or "vix" in param.lower()
+                        for param in param_names
+                    ):
+                        return True
+            except Exception:
+                pass  # Fall back to strategy name check
 
         return strategy_name in market_data_strategies
+
+    def _strategy_required_timeframes(
+        self, strategy_class: Type[bt.Strategy]
+    ) -> set[str]:
+        names: set[str] = {"1m"}
+
+        params = getattr(strategy_class, "params", ())
+        if isinstance(params, (tuple, list)):
+            for p in params:
+                if not p:
+                    continue
+                key = (
+                    p[0].lower()
+                    if isinstance(p, (tuple, list)) and len(p) > 0
+                    else str(p).lower()
+                )
+                if "5m" in key or "primary_timeframe_compression" in key:
+                    names.add("5m")
+                if "1h" in key or "hour" in key:
+                    names.add("1h")
+                if "4h" in key:
+                    names.add("4h")
+                if "daily" in key:
+                    names.add("1d")
+
+        for attr in dir(strategy_class):
+            la = attr.lower()
+            if "data_1h" in la:
+                names.add("1h")
+            if "data_4h" in la:
+                names.add("4h")
+            if "data_daily" in la:
+                names.add("1d")
+
+        return names
 
     def _load_market_data(
         self,
@@ -209,32 +249,46 @@ class CerebroEngine:
         market_symbols = ["SPY", "VIX"]
 
         for symbol in market_symbols:
-            # Look for daily data for market symbols
-            symbol_dir = data_path / "Daily" / symbol
             csv_file = None
 
-            if symbol_dir.exists():
-                # Find the most recent CSV file
-                csv_files = list(symbol_dir.glob(f"{symbol}_Daily_*.csv"))
-                if csv_files:
-                    csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-                    csv_file = csv_files[0]
+            if symbol == "VIX":
+                symbol_dir = data_path / symbol / "Daily"
+                if symbol_dir.exists():
+                    csv_files = list(symbol_dir.glob(f"{symbol}_Daily_*.csv"))
+                    if csv_files:
+                        csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                        csv_file = csv_files[0]
+            else:
+                symbol_dir = data_path / symbol / "1m"
+                if symbol_dir.exists():
+                    csv_files = list(symbol_dir.glob(f"{symbol}_1m_*.csv"))
+                    if csv_files:
+                        csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                        csv_file = csv_files[0]
 
-            # Fallback to old structure
             if csv_file is None or not csv_file.exists():
-                csv_file = data_path / f"{symbol}_Daily.csv"
-                if not csv_file.exists():
-                    print(f"⚠️  Market data not found for {symbol}, skipping")
-                    continue
+                print(f"⚠️  Market data not found for {symbol}, skipping")
+                continue
 
             print(f"📊 Loading market data: {symbol}")
-            self.add_data(
-                str(csv_file),
-                name=f"{symbol}_daily",
-                fromdate=fromdate,
-                todate=todate,
-                resolution="Daily",
-            )
+            if symbol == "VIX":
+                # Load VIX as daily data
+                self.add_data(
+                    str(csv_file),
+                    name=f"{symbol}_daily",
+                    fromdate=fromdate,
+                    todate=todate,
+                    resolution="Daily",
+                )
+            else:
+                # Load SPY 1m data
+                self.add_data(
+                    str(csv_file),
+                    name=f"{symbol}_1m",
+                    fromdate=fromdate,
+                    todate=todate,
+                    resolution="1m",
+                )
 
     def add_multiple_data(
         self,
@@ -265,19 +319,24 @@ class CerebroEngine:
             print("🌍 Strategy requires market data, loading SPY/VIX...")
             self._load_market_data(str(data_path), fromdate, todate)
 
+        required_timeframes = {"1m"}
+        if strategy_class is not None:
+            required_timeframes |= self._strategy_required_timeframes(strategy_class)
+
         for symbol in symbols:
-            # Try the organized structure first: data/csv/resolution/symbol/
-            symbol_dir = data_path / resolution / symbol
             csv_file = None
 
-            print(f"🔍 Looking for data for {symbol} in {resolution} resolution")
+            print(f"🔍 Looking for 1m data for {symbol}")
             print(f"   data_path = {data_path} (exists: {data_path.exists()})")
+
+            # Look for 1m data (symbol-first layout)
+            symbol_dir = data_path / symbol / "1m"
             print(f"   symbol_dir = {symbol_dir} (exists: {symbol_dir.exists()})")
 
             if symbol_dir.exists():
-                print(f"   Using organized structure")
-                # Find the most recent CSV file for this symbol/resolution
-                csv_files = list(symbol_dir.glob(f"{symbol}_{resolution}_*.csv"))
+                print(f"   Using 1m data structure")
+                # Find the most recent CSV file for this symbol
+                csv_files = list(symbol_dir.glob(f"{symbol}_1m_*.csv"))
                 print(
                     f"   Found {len(csv_files)} CSV files: {[str(f) for f in csv_files]}"
                 )
@@ -287,26 +346,38 @@ class CerebroEngine:
                     csv_file = csv_files[0]
                     print(f"   Selected file: {csv_file} (exists: {csv_file.exists()})")
             else:
-                print(f"   Organized structure not found, trying fallback")
-                # Fallback to old structure: data/csv/symbol_resolution.csv
-                csv_file = data_path / f"{symbol}_{resolution}.csv"
-                print(f"   Fallback file: {csv_file} (exists: {csv_file.exists()})")
-                if not csv_file.exists():
-                    csv_file = None
+                print(f"   Symbol directory not found: {symbol_dir}")
+                csv_file = None
 
             if csv_file is None or not csv_file.exists():
-                print(
-                    f"⚠️  Warning: Data file not found for {symbol} in {resolution} resolution"
-                )
+                print(f"⚠️  Warning: Data file not found for {symbol} in 1m resolution")
                 continue
 
-            self.add_data(
-                str(csv_file),
-                name=symbol,
-                fromdate=fromdate,
-                todate=todate,
-                resolution=resolution,
+            print(
+                f"📊 Loading data for {symbol} timeframes: {sorted(required_timeframes)}"
             )
+
+            if "1m" in required_timeframes:
+                self.add_data(
+                    str(csv_file),
+                    name=f"{symbol}_1m",
+                    fromdate=fromdate,
+                    todate=todate,
+                    resolution="1m",
+                )
+
+            for tf in sorted(required_timeframes):
+                if tf == "1m":
+                    continue
+                resampled_path = get_or_build_resampled_csv(Path(csv_file), symbol, tf)
+                tf_res = "Daily" if tf == "1d" else "1m"
+                self.add_data(
+                    str(resampled_path),
+                    name=f"{symbol}_{tf}",
+                    fromdate=fromdate,
+                    todate=todate,
+                    resolution=tf_res,
+                )
 
     def run(self) -> List:
         """

@@ -39,6 +39,7 @@ matplotlib>=3.7.0
 # Data Processing
 openpyxl>=3.1.0
 xlsxwriter>=3.1.0
+zstandard>=0.22.0
 
 # Epic 20: Parallel Backtesting (Redis Queue)
 redis>=4.5.0

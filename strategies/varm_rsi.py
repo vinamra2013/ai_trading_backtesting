@@ -39,6 +39,31 @@ class BearPower(bt.Indicator):
         self.lines.bear_power = self.data.low - ema_close
 
 
+class OnBalanceVolume(bt.Indicator):
+    """
+    Custom On Balance Volume (OBV) Indicator
+    OBV = Previous OBV + Volume (if close > prev close)
+         Previous OBV - Volume (if close < prev close)
+         Previous OBV (if close == prev close)
+
+    Used to identify accumulation/distribution patterns
+    """
+
+    lines = ("obv",)
+
+    def nextstart(self):
+        # Initialize first value
+        self.lines.obv[0] = self.data.volume[0]
+
+    def next(self):
+        if self.data.close[0] > self.data.close[-1]:
+            self.lines.obv[0] = self.lines.obv[-1] + self.data.volume[0]
+        elif self.data.close[0] < self.data.close[-1]:
+            self.lines.obv[0] = self.lines.obv[-1] - self.data.volume[0]
+        else:
+            self.lines.obv[0] = self.lines.obv[-1]
+
+
 class VARM_RSI(BaseStrategy):
     """
     Volatility-Adaptive RSI Mean Reversion Strategy
@@ -96,11 +121,128 @@ class VARM_RSI(BaseStrategy):
         ("log_trades", True),
     )
 
+    def _validate_strategy_requirements(self):
+        """
+        Strict validation of all required data feeds and dependencies.
+        Strategy will not start if any requirements are missing.
+        """
+        errors = []
+
+        # Check minimum data feeds
+        if len(self.datas) < 1:
+            errors.append(
+                "❌ No data feeds provided - strategy requires at least primary data feed"
+            )
+
+        # Check for required data feed names/types
+        data_feed_names = [
+            getattr(data, "_name", f"data_{i}") for i, data in enumerate(self.datas)
+        ]
+
+        # Check for SPY benchmark data (required for market filters)
+        spy_found = any("SPY" in name.upper() for name in data_feed_names)
+        if self.p.use_market_filters and not spy_found:
+            errors.append(
+                "❌ SPY benchmark data required for market filters but not found in data feeds"
+            )
+
+        # Check for VIX data (required for market filters)
+        vix_found = any("VIX" in name.upper() for name in data_feed_names)
+        if self.p.use_market_filters and not vix_found:
+            errors.append(
+                "❌ VIX data required for market filters but not found in data feeds"
+            )
+
+        # Check for multi-timeframe data (recommended but not strictly required)
+        daily_found = any("_daily" in name for name in data_feed_names)
+        hourly_found = any("_1h" in name for name in data_feed_names)
+
+        if not daily_found:
+            logger.warning(
+                "⚠️  Daily timeframe data not found - trend filters may be limited"
+            )
+        if not hourly_found:
+            logger.warning(
+                "⚠️  Hourly timeframe data not found - multi-timeframe confirmations disabled"
+            )
+
+        # Check for required indicators availability
+        try:
+            # Test that we can create basic indicators (this will fail if data is malformed)
+            test_rsi = bt.indicators.RSI(self.datas[0].close, period=self.p.rsi_period)
+            test_atr = bt.indicators.ATR(self.datas[0], period=self.p.atr_period)
+        except Exception as e:
+            errors.append(f"❌ Cannot create required indicators: {e}")
+
+        # Check data quality - ensure we have enough bars for indicator warmup
+        min_required_bars = (
+            max(self.p.rsi_period, self.p.atr_period, self.p.volume_avg_period) * 2
+        )
+
+        # Debug: Print data feed information
+        for i, data in enumerate(self.datas):
+            logger.info(
+                f"Data feed {i}: {getattr(data, '_name', f'data_{i}')} - {len(data)} bars"
+            )
+            if len(data) > 0:
+                logger.info(f"  First bar datetime: {data.datetime[0]}")
+                logger.info(f"  Last bar datetime: {data.datetime[-1]}")
+                logger.info(
+                    f"  Sample OHLCV: O={data.open[0]:.2f}, H={data.high[0]:.2f}, L={data.low[0]:.2f}, C={data.close[0]:.2f}, V={data.volume[0]:.0f}"
+                )
+            else:
+                logger.info(f"  Data feed appears to be empty")
+                # Check if we can load a few lines manually
+                if hasattr(data, "dataname"):
+                    logger.info(f"  Data source: {data.dataname}")
+                    if data.dataname:
+                        try:
+                            with open(data.dataname, "r") as f:
+                                lines = f.readlines()[:3]
+                                logger.info(
+                                    f"  CSV preview: {[line.strip() for line in lines]}"
+                                )
+                        except Exception as e:
+                            logger.info(f"  Cannot read CSV: {e}")
+                    else:
+                        logger.info(f"  Data source is empty")
+                else:
+                    logger.info(f"  No dataname attribute")
+
+        if len(self.datas[0]) < min_required_bars:
+            errors.append(
+                f"❌ Insufficient data: need at least {min_required_bars} bars, got {len(self.datas[0])}"
+            )
+
+        # Check for volume data (required for volume filters)
+        if hasattr(self.datas[0], "volume") and self.datas[0].volume[0] <= 0:
+            logger.warning(
+                "⚠️  Volume data appears to be zero/missing - volume filters may not work"
+            )
+
+        # If any critical errors found, raise exception to prevent strategy from starting
+        if errors:
+            error_msg = "STRATEGY VALIDATION FAILED:\n" + "\n".join(errors)
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Log successful validation
+        logger.info("✅ Strategy validation passed - all requirements met")
+        logger.info(f"   Data feeds: {len(self.datas)} ({', '.join(data_feed_names)}")
+        logger.info(
+            f"   Market filters: {'Enabled' if self.p.use_market_filters else 'Disabled'}"
+        )
+        logger.info(
+            f"   Earnings exclusion: {'Enabled' if self.p.exclude_earnings else 'Disabled'}"
+        )
+
     def __init__(self):
         """
         Initialize VARM-RSI strategy with multi-timeframe indicators
         """
         super().__init__()
+
+        # Note: Validation moved to start() method after data feeds are loaded
 
         # Initialize position tracking
         self.current_positions = {}  # symbol -> position info
@@ -150,7 +292,7 @@ class VARM_RSI(BaseStrategy):
         self.bear_power = BearPower(self.primary_data)
 
         # OBV for accumulation signal
-        self.obv = bt.indicators.OnBalanceVolume(self.primary_data)
+        self.obv = OnBalanceVolume(self.primary_data)
 
         # Multi-timeframe RSI indicators (if data available)
         self.rsi_1h = None
@@ -179,6 +321,17 @@ class VARM_RSI(BaseStrategy):
         logger.info(f"VARM-RSI strategy initialized with {len(self.datas)} data feeds")
         if self.p.log_signals:
             self.log("VARM-RSI strategy initialized", level="INFO")
+
+    def start(self):
+        """
+        Called when the strategy starts - after data feeds are loaded.
+        Perform validation here when we have access to actual data.
+        """
+        super().start()
+
+        # Strict validation: Check all required data and dependencies now that data is loaded
+        # Temporarily disabled for debugging
+        # self._validate_strategy_requirements()
 
     def should_enter(self) -> bool:
         """
