@@ -65,7 +65,7 @@ class OptimizationService:
         if MLFLOW_LOGGER_AVAILABLE:
             try:
                 self.mlflow_logger = MLflowBacktestLogger(
-                    tracking_uri="http://172.25.0.6:5000"
+                    tracking_uri=None  # Will use environment variable or default
                 )
                 logger.info("MLflow logger initialized for optimization tracking")
             except Exception as e:

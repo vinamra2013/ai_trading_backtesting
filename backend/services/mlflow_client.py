@@ -35,12 +35,23 @@ class MLflowClientService:
 
     def __init__(
         self,
-        tracking_uri: str = "http://172.25.0.6:5000",
+        tracking_uri: Optional[str] = None,
         redis_host: str = "redis",
         redis_port: int = 6379,
         cache_ttl_seconds: int = 300,  # 5 minutes default
     ):
-        self.tracking_uri = tracking_uri
+        if tracking_uri is None:
+            # Try environment variable first
+            tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+
+            # If not set, use Docker service name for container environments
+            if not tracking_uri:
+                if os.path.exists("/.dockerenv"):
+                    tracking_uri = "http://mlflow:5000"
+                else:
+                    tracking_uri = "http://localhost:5000"
+
+        self.tracking_uri = tracking_uri or "http://localhost:5000"
         self.redis_host = redis_host
         self.redis_port = redis_port
         self.cache_ttl = cache_ttl_seconds

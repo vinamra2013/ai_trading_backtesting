@@ -78,26 +78,29 @@ services:
 
   # Streamlit Monitoring Dashboard
   monitoring:
-    build:
-      context: .
-      dockerfile: Dockerfile.monitoring
-    container_name: monitoring-dashboard
-    volumes:
-      - ./monitoring:/app/monitoring
-      - ./scripts:/app/scripts:ro
-      - ./data:/app/data:ro
-      - ./results:/app/results:ro
-      - ./logs:/app/logs:ro
-    ports:
-      - "8501:8501"  # Streamlit default port
-    environment:
-      - STREAMLIT_SERVER_PORT=8501
-      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
-    networks:
-      - trading-network
-    depends_on:
-      - sqlite
-    restart: unless-stopped
+     build:
+       context: .
+       dockerfile: Dockerfile.monitoring
+     container_name: monitoring-dashboard
+     env_file:
+       - .env
+     volumes:
+       - ./monitoring:/app/monitoring
+       - ./scripts:/app/scripts:ro
+       - ./data:/app/data:ro
+       - ./results:/app/results:ro
+       - ./logs:/app/logs:ro
+       - ./.env:/app/.env
+     ports:
+       - "8501:8501"  # Streamlit default port
+     environment:
+       - STREAMLIT_SERVER_PORT=8501
+       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+     networks:
+       - trading-network
+     depends_on:
+       - sqlite
+     restart: unless-stopped
 
   # PostgreSQL Database (MLflow Backend + Optuna Storage)
   postgres:

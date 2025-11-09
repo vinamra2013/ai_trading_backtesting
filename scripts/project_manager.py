@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Union, Tuple
 import logging
 import re
+import os
 from pathlib import Path
 
 # Configure logging
@@ -35,28 +36,47 @@ class ProjectManager:
     - Layer 3: Parent-child runs for optimization studies
     """
 
-    def __init__(self, tracking_uri: str = "http://172.25.0.5:5000"):
+    def __init__(self, tracking_uri: Optional[str] = None):
         """
         Initialize project manager.
 
         Args:
-            tracking_uri: MLflow tracking server URI
+            tracking_uri: MLflow tracking server URI. If None, uses environment variable
+                         or defaults to Docker service name for container environments.
         """
+        if tracking_uri is None:
+            # Try environment variable first
+            tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+
+            # If not set, use Docker service name for container environments
+            if not tracking_uri:
+                import os
+
+                if os.path.exists("/.dockerenv"):
+                    tracking_uri = "http://mlflow:5000"
+                else:
+                    tracking_uri = "http://localhost:5000"
+
         self.tracking_uri = tracking_uri
         self.mlflow_available = False
 
         try:
             mlflow.set_tracking_uri(tracking_uri)
             self.mlflow_available = True
-            logger.info(f"Project manager initialized with tracking URI: {tracking_uri}")
+            logger.info(
+                f"Project manager initialized with tracking URI: {tracking_uri}"
+            )
         except Exception as e:
-            logger.warning(f"Failed to initialize MLflow client: {e}. Continuing without MLflow.")
+            logger.warning(
+                f"Failed to initialize MLflow client: {e}. Continuing without MLflow."
+            )
             self.mlflow_available = False
 
     # === NAMING CONVENTIONS ===
 
-    def build_experiment_name(self, project: str, asset_class: str,
-                            strategy_family: str, strategy: str) -> str:
+    def build_experiment_name(
+        self, project: str, asset_class: str, strategy_family: str, strategy: str
+    ) -> str:
         """
         Build experiment name using dot notation convention.
 
@@ -81,22 +101,31 @@ class ProjectManager:
         Returns:
             Dictionary with project, asset_class, strategy_family, strategy
         """
-        parts = experiment_name.split('.')
+        parts = experiment_name.split(".")
         if len(parts) != 4:
-            raise ValueError(f"Invalid experiment name format: {experiment_name}. Expected: Project.AssetClass.StrategyFamily.Strategy")
+            raise ValueError(
+                f"Invalid experiment name format: {experiment_name}. Expected: Project.AssetClass.StrategyFamily.Strategy"
+            )
 
         return {
-            'project': parts[0],
-            'asset_class': parts[1],
-            'strategy_family': parts[2],
-            'strategy': parts[3]
+            "project": parts[0],
+            "asset_class": parts[1],
+            "strategy_family": parts[2],
+            "strategy": parts[3],
         }
 
     # === TAG MANAGEMENT ===
 
-    def build_experiment_tags(self, project: str, asset_class: str, strategy_family: str,
-                            strategy: str, team: str = "quant_research",
-                            status: str = "research", **kwargs) -> Dict[str, str]:
+    def build_experiment_tags(
+        self,
+        project: str,
+        asset_class: str,
+        strategy_family: str,
+        strategy: str,
+        team: str = "quant_research",
+        status: str = "research",
+        **kwargs,
+    ) -> Dict[str, str]:
         """
         Build comprehensive tagging dictionary for experiments.
 
@@ -121,15 +150,19 @@ class ProjectManager:
             "status": status,
             "created_date": datetime.now().isoformat(),
             "created_by": "project_manager",
-            "naming_convention": "dot_notation_v1"
+            "naming_convention": "dot_notation_v1",
         }
 
         # Add any additional tags
         tags.update(kwargs)
         return tags
 
-    def build_run_tags(self, run_type: str = "backtest", optimization_trial: Optional[int] = None,
-                      **kwargs) -> Dict[str, str]:
+    def build_run_tags(
+        self,
+        run_type: str = "backtest",
+        optimization_trial: Optional[int] = None,
+        **kwargs,
+    ) -> Dict[str, str]:
         """
         Build tagging dictionary for individual runs.
 
@@ -144,7 +177,7 @@ class ProjectManager:
         tags = {
             "run_type": run_type,
             "run_timestamp": datetime.now().isoformat(),
-            "run_by": "project_manager"
+            "run_by": "project_manager",
         }
 
         if optimization_trial is not None:
@@ -155,9 +188,16 @@ class ProjectManager:
 
     # === EXPERIMENT MANAGEMENT ===
 
-    def create_experiment(self, project: str, asset_class: str, strategy_family: str,
-                        strategy: str, team: str = "quant_research",
-                        status: str = "research", **kwargs) -> Optional[str]:
+    def create_experiment(
+        self,
+        project: str,
+        asset_class: str,
+        strategy_family: str,
+        strategy: str,
+        team: str = "quant_research",
+        status: str = "research",
+        **kwargs,
+    ) -> Optional[str]:
         """
         Create experiment with proper naming and tagging.
 
@@ -177,13 +217,19 @@ class ProjectManager:
             logger.warning("MLflow not available, skipping experiment creation")
             return None
 
-        experiment_name = self.build_experiment_name(project, asset_class, strategy_family, strategy)
-        tags = self.build_experiment_tags(project, asset_class, strategy_family, strategy, team, status, **kwargs)
+        experiment_name = self.build_experiment_name(
+            project, asset_class, strategy_family, strategy
+        )
+        tags = self.build_experiment_tags(
+            project, asset_class, strategy_family, strategy, team, status, **kwargs
+        )
 
         try:
             experiment = mlflow.get_experiment_by_name(experiment_name)
             if experiment is None:
-                experiment_id = mlflow.create_experiment(name=experiment_name, tags=tags)
+                experiment_id = mlflow.create_experiment(
+                    name=experiment_name, tags=tags
+                )
                 logger.info(f"Created experiment: {experiment_name}")
                 return experiment_id
             else:
@@ -193,7 +239,9 @@ class ProjectManager:
             logger.error(f"Failed to create experiment {experiment_name}: {e}")
             return None
 
-    def get_or_create_experiment(self, experiment_name: str, tags: Optional[Dict] = None) -> Optional[str]:
+    def get_or_create_experiment(
+        self, experiment_name: str, tags: Optional[Dict] = None
+    ) -> Optional[str]:
         """
         Get existing experiment or create new one.
 
@@ -210,7 +258,9 @@ class ProjectManager:
         try:
             experiment = mlflow.get_experiment_by_name(experiment_name)
             if experiment is None:
-                experiment_id = mlflow.create_experiment(name=experiment_name, tags=tags or {})
+                experiment_id = mlflow.create_experiment(
+                    name=experiment_name, tags=tags or {}
+                )
                 logger.info(f"Created experiment: {experiment_name}")
                 return experiment_id
             else:
@@ -235,7 +285,9 @@ class ProjectManager:
         filter_string = f"name LIKE '{project}.%'"
         return self.query_experiments(filter_string, max_results)
 
-    def query_by_asset_class(self, asset_class: str, max_results: int = 100) -> List[Dict]:
+    def query_by_asset_class(
+        self, asset_class: str, max_results: int = 100
+    ) -> List[Dict]:
         """
         Query experiments by asset class.
 
@@ -249,7 +301,9 @@ class ProjectManager:
         filter_string = f"name LIKE '%.{asset_class}.%'"
         return self.query_experiments(filter_string, max_results)
 
-    def query_by_strategy_family(self, strategy_family: str, max_results: int = 100) -> List[Dict]:
+    def query_by_strategy_family(
+        self, strategy_family: str, max_results: int = 100
+    ) -> List[Dict]:
         """
         Query experiments by strategy family.
 
@@ -291,7 +345,9 @@ class ProjectManager:
         filter_string = f"tags.status = '{status}'"
         return self.query_experiments(filter_string, max_results)
 
-    def query_recent_experiments(self, days: int = 7, max_results: int = 50) -> List[Dict]:
+    def query_recent_experiments(
+        self, days: int = 7, max_results: int = 50
+    ) -> List[Dict]:
         """
         Query recently created experiments.
 
@@ -306,8 +362,9 @@ class ProjectManager:
         filter_string = f"creation_time >= {int(cutoff_date.timestamp() * 1000)}"
         return self.query_experiments(filter_string, max_results)
 
-    def query_experiments(self, filter_string: Optional[str] = None,
-                         max_results: int = 100) -> List[Dict]:
+    def query_experiments(
+        self, filter_string: Optional[str] = None, max_results: int = 100
+    ) -> List[Dict]:
         """
         Query experiments with optional filtering.
 
@@ -323,8 +380,7 @@ class ProjectManager:
 
         try:
             experiments = mlflow.search_experiments(
-                filter_string=filter_string,
-                max_results=max_results
+                filter_string=filter_string, max_results=max_results
             )
 
             return [
@@ -334,7 +390,7 @@ class ProjectManager:
                     "lifecycle_stage": exp.lifecycle_stage,
                     "tags": exp.tags,
                     "creation_time": exp.creation_time,
-                    "last_update_time": exp.last_update_time
+                    "last_update_time": exp.last_update_time,
                 }
                 for exp in experiments
             ]
@@ -344,8 +400,12 @@ class ProjectManager:
 
     # === RUN MANAGEMENT ===
 
-    def query_runs_by_experiment(self, experiment_name: str, filter_string: Optional[str] = None,
-                               max_results: int = 100) -> List[Dict]:
+    def query_runs_by_experiment(
+        self,
+        experiment_name: str,
+        filter_string: Optional[str] = None,
+        max_results: int = 100,
+    ) -> List[Dict]:
         """
         Query runs within a specific experiment.
 
@@ -374,8 +434,7 @@ class ProjectManager:
                 full_filter = base_filter
 
             runs = mlflow.search_runs(
-                filter_string=full_filter,
-                max_results=max_results
+                filter_string=full_filter, max_results=max_results
             )
 
             return [
@@ -387,7 +446,7 @@ class ProjectManager:
                     "end_time": run.info.end_time,
                     "metrics": run.data.metrics,
                     "params": run.data.params,
-                    "tags": run.data.tags
+                    "tags": run.data.tags,
                 }
                 for run in runs
             ]
@@ -395,7 +454,9 @@ class ProjectManager:
             logger.error(f"Failed to query runs for experiment {experiment_name}: {e}")
             return []
 
-    def get_best_run(self, experiment_name: str, metric: str, maximize: bool = True) -> Optional[Dict]:
+    def get_best_run(
+        self, experiment_name: str, metric: str, maximize: bool = True
+    ) -> Optional[Dict]:
         """
         Get the best run for a given metric in an experiment.
 
@@ -413,16 +474,16 @@ class ProjectManager:
             return None
 
         # Filter runs that have the metric
-        valid_runs = [run for run in runs if metric in run.get('metrics', {})]
+        valid_runs = [run for run in runs if metric in run.get("metrics", {})]
 
         if not valid_runs:
             return None
 
         # Find best run
         if maximize:
-            best_run = max(valid_runs, key=lambda r: r['metrics'][metric])
+            best_run = max(valid_runs, key=lambda r: r["metrics"][metric])
         else:
-            best_run = min(valid_runs, key=lambda r: r['metrics'][metric])
+            best_run = min(valid_runs, key=lambda r: r["metrics"][metric])
 
         return best_run
 
@@ -438,7 +499,7 @@ class ProjectManager:
         Returns:
             True if valid, False otherwise
         """
-        pattern = r'^[^.]+\.[^.]+\.[^.]+\.[^.]+$'
+        pattern = r"^[^.]+\.[^.]+\.[^.]+\.[^.]+$"
         return bool(re.match(pattern, experiment_name))
 
     def list_projects(self) -> List[str]:
@@ -453,8 +514,8 @@ class ProjectManager:
 
         for exp in experiments:
             try:
-                parsed = self.parse_experiment_name(exp['name'])
-                projects.add(parsed['project'])
+                parsed = self.parse_experiment_name(exp["name"])
+                projects.add(parsed["project"])
             except ValueError:
                 continue
 
@@ -472,8 +533,8 @@ class ProjectManager:
 
         for exp in experiments:
             try:
-                parsed = self.parse_experiment_name(exp['name'])
-                asset_classes.add(parsed['asset_class'])
+                parsed = self.parse_experiment_name(exp["name"])
+                asset_classes.add(parsed["asset_class"])
             except ValueError:
                 continue
 
@@ -491,8 +552,8 @@ class ProjectManager:
 
         for exp in experiments:
             try:
-                parsed = self.parse_experiment_name(exp['name'])
-                strategy_families.add(parsed['strategy_family'])
+                parsed = self.parse_experiment_name(exp["name"])
+                strategy_families.add(parsed["strategy_family"])
             except ValueError:
                 continue
 
@@ -500,7 +561,9 @@ class ProjectManager:
 
     # === EXAMPLE WORKFLOWS ===
 
-    def create_research_project(self, project_name: str, strategies: List[Tuple[str, str, str]]) -> List[str]:
+    def create_research_project(
+        self, project_name: str, strategies: List[Tuple[str, str, str]]
+    ) -> List[str]:
         """
         Example workflow: Create a research project with multiple strategies.
 
@@ -520,12 +583,14 @@ class ProjectManager:
                 strategy_family=strategy_family,
                 strategy=strategy,
                 status="research",
-                workflow="bulk_research_creation"
+                workflow="bulk_research_creation",
             )
             if exp_id:
                 experiment_ids.append(exp_id)
 
-        logger.info(f"Created {len(experiment_ids)} experiments for project {project_name}")
+        logger.info(
+            f"Created {len(experiment_ids)} experiments for project {project_name}"
+        )
         return experiment_ids
 
     def archive_old_experiments(self, days_threshold: int = 90) -> int:
@@ -542,10 +607,14 @@ class ProjectManager:
             Number of experiments that would be archived (0 for now)
         """
         # TODO: Implement proper experiment archiving when MLflow client methods are available
-        logger.info(f"Archive functionality not yet implemented. Would archive experiments older than {days_threshold} days")
+        logger.info(
+            f"Archive functionality not yet implemented. Would archive experiments older than {days_threshold} days"
+        )
         return 0
 
-    def compare_strategies(self, project: str, metric: str = "sharpe_ratio") -> Dict[str, Any]:
+    def compare_strategies(
+        self, project: str, metric: str = "sharpe_ratio"
+    ) -> Dict[str, Any]:
         """
         Example workflow: Compare strategies within a project.
 
@@ -561,16 +630,16 @@ class ProjectManager:
 
         for exp in experiments:
             try:
-                parsed = self.parse_experiment_name(exp['name'])
+                parsed = self.parse_experiment_name(exp["name"])
                 strategy_key = f"{parsed['strategy_family']}.{parsed['strategy']}"
 
-                best_run = self.get_best_run(exp['name'], metric)
+                best_run = self.get_best_run(exp["name"], metric)
                 if best_run:
                     comparison[strategy_key] = {
-                        "experiment_name": exp['name'],
-                        "best_metric_value": best_run['metrics'].get(metric),
-                        "run_id": best_run['run_id'],
-                        "params": best_run['params']
+                        "experiment_name": exp["name"],
+                        "best_metric_value": best_run["metrics"].get(metric),
+                        "run_id": best_run["run_id"],
+                        "params": best_run["params"],
                     }
             except (ValueError, KeyError) as e:
                 logger.warning(f"Skipping experiment {exp['name']}: {e}")
