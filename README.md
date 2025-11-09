@@ -354,8 +354,10 @@ nano .env  # Add your IB credentials
 
 ### Access Points
 
-- **Dashboard**: http://localhost:8501
-- **MLflow UI**: http://localhost:5000
+- **Monitoring Dashboard**: http://localhost:8501 (Streamlit, now API-integrated)
+- **FastAPI Backend API**: http://localhost:8230 (REST API for backtesting/optimization)
+- **API Documentation**: http://localhost:8230/docs (FastAPI auto-generated docs)
+- **MLflow UI**: http://localhost:5000 (experiment tracking)
 - **IB Gateway VNC**: vnc://localhost:5900 (password in `.env`)
 
 ---
@@ -365,18 +367,19 @@ nano .env  # Add your IB credentials
 ### Running Backtests with MLflow
 
 ```bash
-# Activate virtual environment
-source venv/bin/activate
-
-# Run backtest with experiment tracking
-python scripts/run_backtest.py \
-  --strategy strategies.sma_crossover.SMACrossover \
-  --symbols SPY \
-  --start 2020-01-01 --end 2024-12-31 \
-  --mlflow \
-  --project Q1_2025 \
-  --asset-class Equities \
-  --strategy-family MeanReversion
+# Submit backtest with MLflow tracking via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameters": {"fast_period": 10, "slow_period": 20},
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31",
+    "mlflow_project": "Q1_2025",
+    "mlflow_asset_class": "Equities",
+    "mlflow_strategy_family": "MeanReversion"
+  }'
 ```
 
 **What Gets Logged**:
@@ -390,15 +393,22 @@ python scripts/run_backtest.py \
 ### Bayesian Parameter Optimization
 
 ```bash
-# Optimize strategy parameters (10x faster than grid search)
-python scripts/optimize_strategy.py \
-  --strategy strategies.sma_crossover.SMACrossover \
-  --param-space scripts/sma_crossover_params.json \
-  --symbols SPY \
-  --start 2020-01-01 --end 2024-12-31 \
-  --metric sharpe_ratio \
-  --n-trials 100 \
-  --study-name sma_opt_v1
+# Optimize strategy parameters via API (10x faster than grid search)
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/optimization/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameter_space": {
+      "fast_period": {"type": "int", "low": 5, "high": 20},
+      "slow_period": {"type": "int", "low": 15, "high": 50}
+    },
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31",
+    "metric": "sharpe_ratio",
+    "n_trials": 100,
+    "study_name": "sma_opt_v1"
+  }'
 ```
 
 **Optimization Features**:
@@ -731,43 +741,44 @@ docker compose logs ib-gateway  # IB Gateway logs
 
 ### External Access Configuration
 
-When accessing the Streamlit dashboard from outside localhost, configure the backend URL in your `.env` file:
+Configure URLs for external access to both the FastAPI backend and monitoring dashboard:
 
 **1. Edit your .env file:**
 ```bash
 nano .env
 ```
 
-**2. Add the backend URL:**
+**2. Add the service URLs:**
 ```bash
-# Replace YOUR_SERVER_IP with your actual server IP/domain
+# FastAPI Backend API (port 8230)
 FASTAPI_BACKEND_URL=http://192.168.1.100:8230
-# Or for domain:
-FASTAPI_BACKEND_URL=http://my-trading-server.com:8230
+
+# Streamlit Monitoring Dashboard (port 8501)
+MONITORING_URL=http://192.168.1.100:8501
 ```
 
-**3. Restart Streamlit:**
-```bash
-streamlit run monitoring/app.py
-```
+**3. Access Points:**
+- **FastAPI Backend API**: `${FASTAPI_BACKEND_URL:-http://localhost:8230}`
+- **Monitoring Dashboard**: `${MONITORING_URL:-http://localhost:8501}`
 
-**Alternative: Environment Variable**
+**Alternative: Environment Variables**
 ```bash
 export FASTAPI_BACKEND_URL=http://your-server-ip:8230
-streamlit run monitoring/app.py
+export MONITORING_URL=http://your-server-ip:8501
 ```
 
 **Docker Environment:**
 ```yaml
-# In docker-compose.yml, add to monitoring service:
+# In docker-compose.yml, add to services as needed:
 environment:
   - FASTAPI_BACKEND_URL=http://your-host-ip:8230
+  - MONITORING_URL=http://your-host-ip:8501
 ```
 
 The API client automatically detects the environment:
 - **Docker**: Uses `fastapi-backend:8230` (service name)
 - **Local**: Uses `localhost:8230`
-- **External**: Uses configured URL from `.env` or `FASTAPI_BACKEND_URL` environment variable
+- **External**: Uses configured URL from `.env` or environment variables
 
 **10 Interactive Tabs**:
 

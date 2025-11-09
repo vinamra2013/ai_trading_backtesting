@@ -92,22 +92,34 @@ source venv/bin/activate
 #### Enable MLflow Logging
 
 ```bash
-# Run backtest (Daily data - default)
-source venv/bin/activate
-python scripts/run_backtest.py \
-  --strategy strategies.sma_crossover.SMACrossover \
-  --start 2020-01-01 --end 2024-12-31 \
-  --cash 100000 \
-  --symbols SPY
+# Submit backtest with MLflow tracking via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameters": {"fast_period": 10, "slow_period": 20},
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31",
+    "mlflow_project": "Q1_2025",
+    "mlflow_asset_class": "Equities",
+    "mlflow_strategy_family": "MeanReversion"
+  }'
 
-# Run backtest (1-minute data)
-source venv/bin/activate
-python scripts/run_backtest.py \
-  --strategy strategies.sma_crossover.SMACrossover \
-  --start 2025-10-07 --end 2025-10-14 \
-  --cash 100000 \
-  --symbols SPY \
-  --resolution 1m
+# High-frequency backtest via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameters": {"fast_period": 10, "slow_period": 20},
+    "start_date": "2025-10-07",
+    "end_date": "2025-10-14",
+    "resolution": "1m",
+    "mlflow_project": "HighFreq_2025",
+    "mlflow_asset_class": "Equities",
+    "mlflow_strategy_family": "MeanReversion"
+  }'
 ```
 
 #### MLflow Features
@@ -151,52 +163,58 @@ Backtests now include:
 **Status**: ✅ Implemented - Optuna-based intelligent optimization with MLflow integration.
 
 ```bash
-# Single-threaded optimization (Daily data)
-docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_strategy.py \
-  --strategy strategies/sma_crossover.py \
-  --param-space /app/scripts/sma_crossover_params.json \
-  --symbols SPY \
-  --start 2020-01-01 \
-  --end 2024-12-31 \
-  --metric sharpe_ratio \
-  --n-trials 100 \
-  --study-name sma_opt_v1
+# Single optimization job via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/optimization/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameter_space": {
+      "fast_period": {"type": "int", "low": 5, "high": 20},
+      "slow_period": {"type": "int", "low": 15, "high": 50}
+    },
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31",
+    "metric": "sharpe_ratio",
+    "n_trials": 100,
+    "study_name": "sma_opt_v1"
+  }'
 
-# High-frequency optimization (1-minute data)
-docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_strategy.py \
-  --strategy strategies/sma_crossover.py \
-  --param-space /app/scripts/sma_crossover_params.json \
-  --symbols SPY \
-  --start 2025-10-07 \
-  --end 2025-10-14 \
-  --resolution 1m \
-  --metric sharpe_ratio \
-  --n-trials 50 \
-  --study-name hf_sma_opt_v1
+# High-frequency optimization via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/optimization/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameter_space": {
+      "fast_period": {"type": "int", "low": 5, "high": 20},
+      "slow_period": {"type": "int", "low": 15, "high": 50}
+    },
+    "start_date": "2025-10-07",
+    "end_date": "2025-10-14",
+    "resolution": "1m",
+    "metric": "sharpe_ratio",
+    "n_trials": 50,
+    "study_name": "hf_sma_opt_v1"
+  }'
 
-# Multi-threaded optimization (Optuna parallel)
-docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/optimize_strategy.py \
-  --strategy strategies/sma_crossover.py \
-  --param-space /app/scripts/sma_crossover_params.json \
-  --symbols SPY \
-  --start 2020-01-01 \
-  --end 2024-12-31 \
-  --metric sharpe_ratio \
-  --n-trials 100 \
-  --n-jobs 4 \
-  --study-name parallel_sma_opt
-
-# Multi-symbol optimization (sequential symbols, parallel trials)
-docker exec backtrader-engine python /app/scripts/optimize_strategy.py \
-  --strategy strategies/rsi_momentum.py \
-  --param-space /app/scripts/rsi_params.json \
-  --symbols SPY,AAPL,MSFT \
-  --start 2021-01-01 \
-  --end 2024-12-31 \
-  --metric sortino_ratio \
-  --n-trials 50 \
-  --n-jobs 2 \
-  --study-name multi_symbol_rsi_opt
+# Multi-symbol optimization via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/optimization/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "rsi_momentum",
+    "symbols": ["SPY", "AAPL", "MSFT"],
+    "parameter_space": {
+      "rsi_period": {"type": "int", "low": 10, "high": 30},
+      "overbought_level": {"type": "int", "low": 65, "high": 80},
+      "oversold_level": {"type": "int", "low": 20, "high": 35}
+    },
+    "start_date": "2021-01-01",
+    "end_date": "2024-12-31",
+    "metric": "sortino_ratio",
+    "n_trials": 50,
+    "study_name": "multi_symbol_rsi_opt"
+  }'
 ```
 
 **Features**:
@@ -215,32 +233,34 @@ docker exec backtrader-engine python /app/scripts/optimize_strategy.py \
 **Status**: ✅ Implemented - Redis-based distributed parallel backtesting with unlimited horizontal scaling.
 
 ```bash
-# Run parallel backtest (single strategy, multiple symbols - Daily data)
-docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
-  --symbols SPY AAPL MSFT GOOGL AMZN \
-  --strategies strategies/sma_crossover.py \
-  --strategy-params '{"SPY": {"fast_period": 10, "slow_period": 30}, "AAPL": {"fast_period": 10, "slow_period": 30}}'
+# Submit multiple backtest jobs via API (parallel execution)
+SYMBOLS=("SPY" "AAPL" "MSFT" "GOOGL" "AMZN")
+STRATEGY="sma_crossover"
 
-# Run high-frequency parallel backtest (1-minute data)
-docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
-  --symbols SPY QQQ NVDA TSLA \
-  --strategies strategies/sma_crossover.py \
-  --strategy-params '{"SPY": {"fast_period": 5, "slow_period": 15}}' \
-  --start 2025-10-07 \
-  --end 2025-10-14 \
-  --resolution 1m
+for symbol in "${SYMBOLS[@]}"; do
+  curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+    -H "Content-Type: application/json" \
+    -d "{\"strategy\": \"$STRATEGY\", \"symbols\": [\"$symbol\"], \"parameters\": {\"fast_period\": 10, \"slow_period\": 30}}" &
+done
 
-# Run parallel backtest (multiple strategies, multiple symbols)
-docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
-  --symbols SPY \
-  --strategies strategies/sma_crossover.py strategies/rsi_momentum.py \
-  --strategy-params '{"SPY": {"fast_period": 10, "slow_period": 30}}'
+# High-frequency parallel backtests via API
+HIGH_FREQ_SYMBOLS=("SPY" "QQQ" "NVDA" "TSLA")
+for symbol in "${HIGH_FREQ_SYMBOLS[@]}"; do
+  curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+    -H "Content-Type: application/json" \
+    -d "{\"strategy\": \"sma_crossover\", \"symbols\": [\"$symbol\"], \"parameters\": {\"fast_period\": 5, \"slow_period\": 15}, \"start_date\": \"2025-10-07\", \"end_date\": \"2025-10-14\", \"resolution\": \"1m\"}" &
+done
 
-# Run with progress monitoring
-docker exec backtrader-engine python /app/scripts/parallel_backtest.py \
-  --symbols SPY AAPL MSFT \
-  --strategies strategies/sma_crossover.py \
-  --show-progress
+# Multiple strategies per symbol via API
+STRATEGIES=("sma_crossover" "rsi_momentum")
+for strategy in "${STRATEGIES[@]}"; do
+  curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+    -H "Content-Type: application/json" \
+    -d "{\"strategy\": \"$strategy\", \"symbols\": [\"SPY\"], \"parameters\": {\"fast_period\": 10, \"slow_period\": 30}}" &
+done
+
+# Monitor job status via API
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests" | jq '.[] | {id: .id, status: .status, strategy: .strategy}'
 ```
 
 **Features**:
@@ -703,8 +723,8 @@ Streamlit dashboard runs on port 8501 with 9 tabs for comprehensive monitoring:
 5. **🔬 Backtests**: Historical backtest results (JSON-based)
 6. **⚙️ Optimization**: Parameter optimization history (JSON-based)
 7. **🧪 MLflow**: Experiment tracking and comparison (Epic 17)
-8. **🏥 Health**: System health monitoring and diagnostics
-9. **⚙️ Settings**: Environment variables and configuration
+8. **🏥 Health**: System health monitoring and diagnostics (${FASTAPI_BACKEND_URL:-http://localhost:8230})
+9. **⚙️ Settings**: Environment variables and configuration (${FASTAPI_BACKEND_URL:-http://localhost:8230})
 
 ### MLflow Integration (Epic 17)
 

@@ -20,8 +20,8 @@
 - Access container shell: `docker exec -it backtrader-engine /bin/bash`
 
 ## Backtesting
-- Single backtest: `python scripts/run_backtest.py --strategy strategies.sma_crossover.SMACrossover --symbols SPY --start 2020-01-01 --end 2024-12-31`
-- Parallel backtest: `docker exec backtrader-engine python /app/scripts/parallel_backtest.py --symbols SPY AAPL MSFT --strategies /app/strategies/sma_crossover.py --start 2020-01-01 --end 2024-12-31 --show-progress`
+- Single backtest: `POST /api/backtests/run` with JSON payload containing strategy, symbols, parameters, and date range
+- Parallel backtest: Submit multiple jobs via `POST /api/backtests/run` or use batch submission endpoints
 
 ## Data Management
 - Download data: `python scripts/download_data.py --symbols SPY AAPL --start 2020-01-01 --end 2024-12-31 --validate`
@@ -30,14 +30,13 @@
 - Discovery stats: `python scripts/symbol_discovery.py --stats`
 
 ## Optimization & Analysis
-- Parameter optimization: `docker exec backtrader-engine python /app/scripts/optimize_strategy.py --strategy strategies/sma_crossover.py --symbols SPY --start 2020-01-01 --end 2024-12-31 --metric sharpe_ratio --n-trials 100`
-- Walk-forward analysis: `docker exec backtrader-engine python /app/scripts/walk_forward_analyzer_enhanced.py --strategy strategies/sma_crossover.py --symbols SPY --start 2020-01-01 --end 2024-12-31 --window-size 12 --step-size 3`
+- Parameter optimization: `POST /api/optimization/run` with JSON payload containing strategy, parameter space, symbols, and optimization settings
+- Walk-forward analysis: Available through optimization endpoints with walk-forward configuration
 
 ## Strategy Ranking & Portfolio
-- Save backtest results: `docker exec backtrader-engine python /app/scripts/save_backtest_results.py --input results/parallel_backtests.csv --output results/backtests/ --verbose`
-- Rank strategies: `docker exec backtrader-engine python /app/scripts/strategy_ranker.py --results-dir results/backtests/ --output rankings.csv --verbose`
-- Portfolio optimization: `docker exec backtrader-engine python /app/scripts/portfolio_optimizer.py --strategies rankings.csv --output portfolio_allocation.csv --method equal_weight --verbose`
-- Portfolio analytics: `docker exec backtrader-engine python /app/scripts/portfolio_analytics.py --allocations portfolio_allocation.csv --output portfolio_report.md --export portfolio_analytics.json --verbose`
+- Strategy ranking: `GET /api/analytics/portfolio` returns ranked strategies with performance metrics
+- Portfolio optimization: Results available through analytics endpoints with allocation recommendations
+- Portfolio analytics: `GET /api/analytics/portfolio` provides comprehensive portfolio statistics and strategy rankings
 
 ## Live Trading
 - Start live trading: `./scripts/start_live_trading.sh`

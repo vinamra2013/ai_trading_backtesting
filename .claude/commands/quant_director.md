@@ -358,24 +358,36 @@ cat data/discovered_symbols/high_volume_*.csv | tail -50
 
 #### Phase 2: Strategy Backtesting
 
-**Single Backtest** (for testing):
+**Single Backtest** (via API):
 ```bash
-# Test one strategy on one symbol (Daily data - default)
-docker exec -e PYTHONPATH=/app backtrader-engine \
-  python /app/scripts/run_backtest.py \
-  --strategy /app/strategies/sma_crossover.py \
-  --symbols AAPL \
-  --start 2020-01-01 \
-  --end 2024-12-31
+# Submit backtest job via FastAPI
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameters": {"fast_period": 10, "slow_period": 20},
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31"
+  }'
 
-# Test one strategy on one symbol (1-minute data)
-docker exec -e PYTHONPATH=/app backtrader-engine \
-  python /app/scripts/run_backtest.py \
-  --strategy /app/strategies/sma_crossover.py \
-  --symbols SPY \
-  --start 2025-10-07 \
-  --end 2025-10-14 \
-  --resolution 1m
+# Check job status
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/{job_id}"
+```
+
+**Batch Backtesting** (via API):
+```bash
+# Submit multiple backtest jobs programmatically
+SYMBOLS=("AAPL" "MSFT" "NVDA" "GOOGL" "AMZN")
+STRATEGIES=("sma_crossover" "rsi_momentum" "macd_crossover")
+
+for symbol in "${SYMBOLS[@]}"; do
+  for strategy in "${STRATEGIES[@]}"; do
+    curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+      -H "Content-Type: application/json" \
+      -d "{\"strategy\": \"$strategy\", \"symbols\": [\"$symbol\"], \"start_date\": \"2020-01-01\", \"end_date\": \"2024-12-31\"}"
+  done
+done
 ```
 
 **Batch Backtesting** (for portfolio construction):
@@ -423,52 +435,39 @@ jq '{strategy: .strategy.name, symbol: .configuration.symbols[0], return: .perfo
 
 #### Phase 3: Strategy Ranking
 
-**Rank All Backtests**:
+**Rank All Backtests** (via API):
 ```bash
-# Rank strategies with multi-criteria scoring (direct CSV input)
-docker exec backtrader-engine python /app/scripts/strategy_ranker.py \
-  --csv-input /app/results/parallel_backtests.csv \
-  --output /app/rankings.csv \
-  --top-n 15
+# Get ranked strategies with performance metrics
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.strategy_rankings'
 
-# View top rankings
-docker exec backtrader-engine cat /app/rankings.csv | head -20
+# Filter by Sharpe ratio > 1.0
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | \
+  jq '.strategy_rankings[] | select(.sharpe_ratio > 1.0)'
 ```
 
-**Filter by Criteria**:
+**Advanced Filtering**:
 ```bash
-# Only strategies with Sharpe > 1.0 and DD < 15%
-cat rankings.csv | awk -F',' '$5 > 1.0 && $6 > -0.15 {print}' | head -10
+# Get strategies with Sharpe > 1.0 and max drawdown < 15%
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio?min_sharpe=1.0&max_drawdown=0.15"
 ```
 
 #### Phase 4: Portfolio Construction
 
-**Build Optimal Portfolio**:
+**Build Optimal Portfolio** (via API):
 ```bash
-# Equal-weight allocation
-docker exec backtrader-engine python /app/scripts/portfolio_optimizer.py \
-  --strategies /app/rankings.csv \
-  --output /app/portfolio_allocation.csv \
-  --method equal_weight \
-  --max-positions 3 \
-  --max-capital 1000 \
-  --verbose
+# Get portfolio analytics with allocation recommendations
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.portfolio_statistics'
 
-# View portfolio allocation
-docker exec backtrader-engine cat /app/portfolio_allocation.csv
+# View strategy rankings for portfolio construction
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.strategy_rankings'
 ```
 
 **Portfolio Analytics**:
 ```bash
-# Generate comprehensive portfolio report
-docker exec backtrader-engine python /app/scripts/portfolio_analytics.py \
-  --allocations /app/portfolio_allocation.csv \
-  --output /app/portfolio_report.md \
-  --export /app/portfolio_analytics.json \
-  --verbose
-
-# View portfolio metrics
-docker exec backtrader-engine cat /app/portfolio_analytics.json | jq '.portfolio_metrics'
+# Get comprehensive portfolio metrics and rankings
+RESPONSE=$(curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio")
+echo $RESPONSE | jq '.portfolio_statistics'
+echo $RESPONSE | jq '.strategy_rankings'
 ```
 
 #### Phase 5: Deployment Preparation
