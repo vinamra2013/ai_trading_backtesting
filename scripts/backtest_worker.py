@@ -18,16 +18,22 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 import traceback
 
+# Add backend to path for database access
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(project_root, "backend"))
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - WORKER-%(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - WORKER-%(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class BacktestJob:
     """Individual backtest job specification"""
+
     job_id: str
     symbol: str
     strategy_path: str
@@ -41,14 +47,14 @@ class BacktestJob:
     def to_dict(self) -> Dict[str, Any]:
         """Convert job to dictionary for serialization"""
         return {
-            'job_id': self.job_id,
-            'symbol': self.symbol,
-            'strategy_path': self.strategy_path,
-            'start_date': self.start_date,
-            'end_date': self.end_date,
-            'strategy_params': self.strategy_params or {},
-            'mlflow_config': self.mlflow_config or {},
-            'batch_id': self.batch_id
+            "job_id": self.job_id,
+            "symbol": self.symbol,
+            "strategy_path": self.strategy_path,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "strategy_params": self.strategy_params or {},
+            "mlflow_config": self.mlflow_config or {},
+            "batch_id": self.batch_id,
         }
 
 
@@ -57,15 +63,13 @@ class BacktestWorker:
 
     def __init__(self):
         self.worker_id = f"worker_{os.getpid()}"
-        self.redis_host = os.getenv('REDIS_HOST', 'redis')
-        self.redis_port = int(os.getenv('REDIS_PORT', 6379))
-        self.mlflow_uri = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000')
+        self.redis_host = os.getenv("REDIS_HOST", "redis")
+        self.redis_port = int(os.getenv("REDIS_PORT", 6379))
+        self.mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 
         # Initialize Redis connection
         self.redis = redis.Redis(
-            host=self.redis_host,
-            port=self.redis_port,
-            decode_responses=True
+            host=self.redis_host, port=self.redis_port, decode_responses=True
         )
 
         # Wait for MLflow to be ready (if MLflow is enabled)
@@ -76,7 +80,9 @@ class BacktestWorker:
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
 
-        logger.info(f"Worker {self.worker_id} initialized (Redis: {self.redis_host}:{self.redis_port})")
+        logger.info(
+            f"Worker {self.worker_id} initialized (Redis: {self.redis_host}:{self.redis_port})"
+        )
 
     def _wait_for_services(self):
         """Wait for dependent services to be ready"""
@@ -91,7 +97,7 @@ class BacktestWorker:
                 logger.info("✅ Redis is ready")
                 break
             except redis.ConnectionError:
-                logger.debug(f"Redis not ready, attempt {i+1}/30")
+                logger.debug(f"Redis not ready, attempt {i + 1}/30")
                 time.sleep(1)
         else:
             logger.warning("⚠️ Redis not available, continuing anyway")
@@ -106,14 +112,16 @@ class BacktestWorker:
                         logger.info("✅ MLflow is ready")
                         break
             except Exception as e:
-                logger.debug(f"MLflow not ready, attempt {i+1}/30: {e}")
+                logger.debug(f"MLflow not ready, attempt {i + 1}/30: {e}")
                 time.sleep(1)
         else:
             logger.warning("⚠️ MLflow not available, MLflow features will be disabled")
 
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully"""
-        logger.info(f"Worker {self.worker_id} received signal {signum}, shutting down...")
+        logger.info(
+            f"Worker {self.worker_id} received signal {signum}, shutting down..."
+        )
         self.running = False
 
     def _parse_job(self, job_data: str) -> BacktestJob:
@@ -126,12 +134,16 @@ class BacktestWorker:
 
     def _execute_backtest(self, job: BacktestJob) -> Dict[str, Any]:
         """Execute single backtest job"""
-        logger.info(f"Worker {self.worker_id} executing: {job.symbol} with {Path(job.strategy_path).name}")
-        logger.debug(f"Job details: symbol={job.symbol}, strategy={job.strategy_path}, dates={job.start_date} to {job.end_date}, params={job.strategy_params}")
+        logger.info(
+            f"Worker {self.worker_id} executing: {job.symbol} with {Path(job.strategy_path).name}"
+        )
+        logger.debug(
+            f"Job details: symbol={job.symbol}, strategy={job.strategy_path}, dates={job.start_date} to {job.end_date}, params={job.strategy_params}"
+        )
 
         try:
             # Import backtest runner dynamically
-            sys.path.insert(0, '/app')
+            sys.path.insert(0, "/app")
             logger.debug(f"Worker {self.worker_id}: Importing BacktestRunner")
             from scripts.run_backtest import BacktestRunner
 
@@ -141,10 +153,12 @@ class BacktestWorker:
 
             # Execute backtest
             mlflow_kwargs = job.mlflow_config or {}
-            mlflow_enabled = mlflow_kwargs.pop('enabled', False)
+            mlflow_enabled = mlflow_kwargs.pop("enabled", False)
             logger.debug(f"Worker {self.worker_id}: MLflow enabled = {mlflow_enabled}")
 
-            logger.debug(f"Worker {self.worker_id}: Calling runner.run() with params: strategy_path={job.strategy_path}, symbols=[{job.symbol}], start_date={job.start_date}, end_date={job.end_date}")
+            logger.debug(
+                f"Worker {self.worker_id}: Calling runner.run() with params: strategy_path={job.strategy_path}, symbols=[{job.symbol}], start_date={job.start_date}, end_date={job.end_date}"
+            )
             result = runner.run(
                 strategy_path=job.strategy_path,
                 symbols=[job.symbol],
@@ -152,34 +166,74 @@ class BacktestWorker:
                 end_date=job.end_date,
                 strategy_params=job.strategy_params,
                 mlflow_enabled=mlflow_enabled,
-                **mlflow_kwargs
+                **mlflow_kwargs,
             )
-            logger.debug(f"Worker {self.worker_id}: runner.run() returned result with keys: {list(result.keys()) if result else 'None'}")
+            logger.debug(
+                f"Worker {self.worker_id}: runner.run() returned result with keys: {list(result.keys()) if result else 'None'}"
+            )
 
             # Add job metadata
-            result['job_id'] = job.job_id
-            result['batch_id'] = job.batch_id
-            result['worker_id'] = self.worker_id
-            result['symbol'] = job.symbol
-            result['strategy_path'] = job.strategy_path
-            result['execution_timestamp'] = time.time()
-            result['status'] = 'success'
+            result["job_id"] = job.job_id
+            result["batch_id"] = job.batch_id
+            result["worker_id"] = self.worker_id
+            result["symbol"] = job.symbol
+            result["strategy_path"] = job.strategy_path
+            result["execution_timestamp"] = time.time()
+            result["status"] = "success"
 
-            logger.info(f"Worker {self.worker_id} completed: {job.job_id} - result keys: {list(result.keys())}")
+            # Update database with results
+            try:
+                from backend.services.backtest_service import get_backtest_service
+
+                service = get_backtest_service()
+                service.update_backtest_results(
+                    job_id=job.job_id,
+                    status="completed",
+                    metrics=result.get("metrics"),
+                    mlflow_run_id=result.get("mlflow_run_id"),
+                )
+                logger.info(
+                    f"Worker {self.worker_id} updated database for job {job.job_id}"
+                )
+            except Exception as db_error:
+                logger.warning(
+                    f"Worker {self.worker_id} failed to update database for job {job.job_id}: {db_error}"
+                )
+
+            logger.info(
+                f"Worker {self.worker_id} completed: {job.job_id} - result keys: {list(result.keys())}"
+            )
             return result
 
         except Exception as e:
             error_details = {
-                'job_id': job.job_id,
-                'batch_id': job.batch_id,
-                'worker_id': self.worker_id,
-                'symbol': job.symbol,
-                'strategy': job.strategy_path,
-                'status': 'failed',
-                'error': str(e),
-                'traceback': traceback.format_exc(),
-                'execution_timestamp': time.time()
+                "job_id": job.job_id,
+                "batch_id": job.batch_id,
+                "worker_id": self.worker_id,
+                "symbol": job.symbol,
+                "strategy": job.strategy_path,
+                "status": "failed",
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "execution_timestamp": time.time(),
             }
+
+            # Update database with failure status
+            try:
+                from backend.services.backtest_service import get_backtest_service
+
+                service = get_backtest_service()
+                service.update_backtest_results(
+                    job_id=job.job_id, status="failed", error_message=str(e)
+                )
+                logger.info(
+                    f"Worker {self.worker_id} updated database with failure for job {job.job_id}"
+                )
+            except Exception as db_error:
+                logger.warning(
+                    f"Worker {self.worker_id} failed to update database for failed job {job.job_id}: {db_error}"
+                )
+
             logger.error(f"Worker {self.worker_id} failed: {job.job_id} - {e}")
             return error_details
 
@@ -189,7 +243,7 @@ class BacktestWorker:
             if not isinstance(result, dict):
                 raise ValueError(f"Result is not a dict: {type(result)}")
 
-            if 'job_id' not in result:
+            if "job_id" not in result:
                 raise ValueError(f"Result missing job_id: {list(result.keys())}")
 
             result_key = f"result:{result['job_id']}"
@@ -202,18 +256,23 @@ class BacktestWorker:
             if success:
                 logger.info(f"✅ Stored result for job {result['job_id']}")
             else:
-                logger.error(f"❌ Failed to store result in Redis for job {result['job_id']}")
+                logger.error(
+                    f"❌ Failed to store result in Redis for job {result['job_id']}"
+                )
 
             # Add to results set for batch tracking
-            if result.get('batch_id'):
-                self.redis.sadd(f"batch_results:{result['batch_id']}", result['job_id'])
+            if result.get("batch_id"):
+                self.redis.sadd(f"batch_results:{result['batch_id']}", result["job_id"])
 
         except Exception as e:
-            logger.error(f"Failed to store result for job {result.get('job_id', 'unknown')}: {e}")
+            logger.error(
+                f"Failed to store result for job {result.get('job_id', 'unknown')}: {e}"
+            )
             logger.error(f"Result type: {type(result)}")
             if isinstance(result, dict):
                 logger.error(f"Result keys: {list(result.keys())}")
             import traceback
+
             logger.error(f"Traceback: {traceback.format_exc()}")
 
     def run(self):
@@ -227,23 +286,41 @@ class BacktestWorker:
                 job = None
                 try:
                     # Try BZPOPMAX first (atomic operation, Redis 5.0+)
-                    job_data = self.redis.bzpopmax('backtest_jobs', timeout=30)
+                    logger.info(
+                        f"Worker {self.worker_id} checking for jobs with BZPOPMAX..."
+                    )
+                    job_data = self.redis.bzpopmax("backtest_jobs", timeout=30)
+                    logger.info(f"Worker {self.worker_id} BZPOPMAX result: {job_data}")
                     if job_data:
                         queue_name, job_json, score = job_data
+                        logger.info(
+                            f"Worker {self.worker_id} received job: {job_json[:100]}..."
+                        )
                         job = self._parse_job(job_json)
                 except (redis.ResponseError, AttributeError):
                     # Fallback for older Redis versions without BZPOPMAX
-                    job_data = self.redis.zrevrange('backtest_jobs', 0, 0, withscores=True)
+                    job_data = self.redis.zrevrange(
+                        "backtest_jobs", 0, 0, withscores=True
+                    )
                     if job_data:
                         job_json, score = job_data[0]
                         # Atomically remove the job
-                        removed = self.redis.zrem('backtest_jobs', job_json)
+                        removed = self.redis.zrem("backtest_jobs", job_json)
                         if removed:
                             job = self._parse_job(job_json)
 
                 if job:
+                    logger.info(
+                        f"Worker {self.worker_id} RECEIVED job {job.job_id} for {job.symbol}"
+                    )
+                    logger.info(
+                        f"Worker {self.worker_id} starting execution of job {job.job_id}"
+                    )
                     # Execute backtest
                     result = self._execute_backtest(job)
+                    logger.info(
+                        f"Worker {self.worker_id} completed execution of job {job.job_id}"
+                    )
 
                     # Store result
                     self._store_result(result)
@@ -253,7 +330,9 @@ class BacktestWorker:
                     logger.debug(f"Worker {self.worker_id} waiting for jobs...")
 
             except redis.ConnectionError:
-                logger.warning(f"Worker {self.worker_id} Redis connection lost, retrying in 5 seconds...")
+                logger.warning(
+                    f"Worker {self.worker_id} Redis connection lost, retrying in 5 seconds..."
+                )
                 time.sleep(5)
             except Exception as e:
                 logger.error(f"Unexpected error in worker {self.worker_id} loop: {e}")

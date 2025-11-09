@@ -26,6 +26,7 @@ COPY scripts/ scripts/
 COPY utils/ utils/
 COPY config/ config/
 COPY strategies/ strategies/
+COPY backend/ backend/
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash worker && \

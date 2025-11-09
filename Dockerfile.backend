@@ -1,0 +1,73 @@
+# FastAPI Backend Service Dockerfile (Epic 25)
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies with optimized apt
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    gcc \
+    g++ \
+    build-essential \
+    curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast Python package installation
+RUN pip install --no-cache-dir uv
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install FastAPI and core backend dependencies
+RUN uv pip install --upgrade pip && \
+    uv pip install \
+    fastapi \
+    uvicorn[standard] \
+    pydantic \
+    sqlalchemy \
+    alembic \
+    psycopg2-binary \
+    redis \
+    httpx \
+    python-multipart
+
+# Install MLflow for experiment tracking integration
+RUN uv pip install \
+    mlflow
+
+# Install testing dependencies
+RUN uv pip install \
+    pytest \
+    pytest-asyncio \
+    httpx
+
+# Create backend directory structure
+RUN mkdir -p /app/backend \
+    /app/backend/routers \
+    /app/backend/models \
+    /app/backend/schemas \
+    /app/backend/services \
+    /app/backend/utils \
+    /app/config \
+    /app/strategies \
+    /app/scripts
+
+# Copy backend code
+COPY backend /app/backend/
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app:$PYTHONPATH
+
+# Expose FastAPI port
+EXPOSE 8230
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8230/health || exit 1
+
+# Default command to run FastAPI server
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8230", "--reload"]

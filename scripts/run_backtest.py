@@ -80,10 +80,19 @@ class BacktestRunner:
     def load_strategy_class(self, strategy_path: str) -> Type[bt.Strategy]:
         """Dynamically load strategy class from file"""
         strategy_file = Path(strategy_path)
+
+        # If file doesn't exist, try adding .py extension
+        if not strategy_file.exists() and not strategy_path.endswith(".py"):
+            strategy_file = Path(strategy_path + ".py")
+
+        # If still doesn't exist, try relative to /app
         if not strategy_file.exists():
             strategy_file = Path("/app") / strategy_path
-            if not strategy_file.exists():
-                raise FileNotFoundError(f"Strategy file not found: {strategy_path}")
+            if not strategy_file.exists() and not strategy_path.endswith(".py"):
+                strategy_file = Path("/app") / (strategy_path + ".py")
+
+        if not strategy_file.exists():
+            raise FileNotFoundError(f"Strategy file not found: {strategy_path}")
 
         # Use unique module name based on file path to avoid conflicts
         module_name = strategy_file.stem + "_strategy_module"
@@ -268,6 +277,15 @@ class BacktestRunner:
         engine.cerebro.addanalyzer(TradeLogAnalyzer, _name="tradelog")
 
         results = engine.run()
+        if not results:
+            print(
+                f"ERROR: engine.run() returned empty results for {strategy_path} on {symbols}"
+            )
+            return {
+                "error": "Backtest failed - no results returned",
+                "strategy": strategy_path,
+                "symbols": symbols,
+            }
         strategy = results[0]
 
         ib_analysis = strategy.analyzers.ibperformance.get_analysis()

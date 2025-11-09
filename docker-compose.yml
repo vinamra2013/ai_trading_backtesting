@@ -198,6 +198,43 @@ services:
       replicas: 4  # Default to 1 worker, scale up as needed
     restart: unless-stopped
 
+  # FastAPI Backend Service (Epic 25)
+  fastapi-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: fastapi-backend
+    ports:
+      - "8230:8230"  # FastAPI default port
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./config:/app/config:ro
+      - ./strategies:/app/strategies:ro
+      - ./scripts:/app/scripts:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8230
+      - DATABASE_URL=postgresql://mlflow:mlflow_secure_password@postgres:5432/mlflow
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - trading-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8230/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 networks:
   trading-network:
     driver: bridge

@@ -407,16 +407,19 @@ class CerebroEngine:
         Returns:
             List: Strategy instances with results
         """
-        print(f"\n{'=' * 60}")
-        print(f"STARTING BACKTEST")
-        print(f"{'=' * 60}")
-        print(f"Initial Portfolio Value: ${self.cerebro.broker.getvalue():,.2f}")
+        try:
+            self.results = self.cerebro.run()
+        except Exception as e:
+            print(f"ERROR during cerebro.run(): {e}")
+            import traceback
 
-        self.results = self.cerebro.run()
+            traceback.print_exc()
+            self.results = []
 
-        final_value = self.cerebro.broker.getvalue()
-        print(f"\nFinal Portfolio Value: ${final_value:,.2f}")
-        print(f"{'=' * 60}\n")
+        if not self.results:
+            print("WARNING: cerebro.run() returned empty results")
+            print(f"Number of data feeds: {len(self.cerebro.datas)}")
+            print(f"Strategy added: {self.strategy_class is not None}")
 
         return self.results
 
