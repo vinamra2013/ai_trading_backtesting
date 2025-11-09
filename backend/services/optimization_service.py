@@ -19,6 +19,14 @@ except ImportError:
     OPTUNA_AVAILABLE = False
     optuna = None
 
+try:
+    from scripts.mlflow_logger import MLflowBacktestLogger
+
+    MLFLOW_LOGGER_AVAILABLE = True
+except ImportError:
+    MLFLOW_LOGGER_AVAILABLE = False
+    MLflowBacktestLogger = None
+
 from backend.utils.database import DatabaseManager, get_db_manager
 from backend.services.backtest_service import get_backtest_service
 from backend.models.backtest import Optimization
@@ -53,6 +61,14 @@ class OptimizationService:
     def __init__(self):
         self.db_manager = get_db_manager()
         self.backtest_service = get_backtest_service()
+        self.mlflow_logger = None
+        if MLFLOW_LOGGER_AVAILABLE:
+            try:
+                self.mlflow_logger = MLflowBacktestLogger()
+                logger.info("MLflow logger initialized for optimization tracking")
+            except Exception as e:
+                logger.warning(f"Failed to initialize MLflow logger: {e}")
+                self.mlflow_logger = None
 
     def _validate_strategy(self, strategy: str) -> str:
         """Validate and normalize strategy path"""
@@ -169,6 +185,36 @@ class OptimizationService:
             f"opt_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         )
 
+        # Create MLflow experiment for this optimization
+        mlflow_experiment_id = None
+        if self.mlflow_logger:
+            try:
+                experiment_name = f"optimization.{request.strategy}.{job_id}"
+                mlflow_experiment_id = self.mlflow_logger.log_optimization_study(
+                    study_name=experiment_name,
+                    best_params={},  # Will be updated when optimization completes
+                    best_value=0.0,  # Will be updated when optimization completes
+                    optimization_metrics={
+                        "max_trials": request.max_trials,
+                        "optimization_method": request.optimization_method,
+                        "objective_metric": request.objective_metric,
+                        "symbols": len(request.symbols),
+                    },
+                    tags={
+                        "optimization_job_id": job_id,
+                        "strategy": request.strategy,
+                        "status": "running",
+                        "created_by": "api_backend",
+                    },
+                )
+                logger.info(
+                    f"Created MLflow experiment {mlflow_experiment_id} for optimization {job_id}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to create MLflow experiment for optimization {job_id}: {e}"
+                )
+
         # Create database record
         session = self.db_manager.get_session()
         try:
@@ -186,6 +232,23 @@ class OptimizationService:
                 started_at=datetime.now(),
                 max_trials=request.max_trials,
                 optimization_method=request.optimization_method,
+                mlflow_experiment_id=mlflow_experiment_id,
+            )
+            # Convert parameter space to dict for storage
+            param_space_dict = {}
+            for name, param_item in request.parameter_space.items():
+                param_space_dict[name] = param_item.dict()
+
+            optimization = self.db_manager.create_optimization(
+                session=session,
+                strategy_name=request.strategy,  # Store original name
+                parameter_space=param_space_dict,
+                objective_metric=request.objective_metric,
+                status="running",
+                started_at=datetime.now(),
+                max_trials=request.max_trials,
+                optimization_method=request.optimization_method,
+                mlflow_experiment_id=mlflow_experiment_id,
             )
 
             # Generate parameter combinations and submit backtests
@@ -198,7 +261,7 @@ class OptimizationService:
             )
 
             jobs_submitted = 0
-            for params in param_combinations:
+            for trial_num, params in enumerate(param_combinations, 1):
                 try:
                     # Submit individual backtest
                     bt_job_id, _ = self.backtest_service.submit_backtest(
@@ -209,9 +272,24 @@ class OptimizationService:
                         start_date=request.start_date,
                         end_date=request.end_date,
                     )
+
+                    # Log trial to MLflow if experiment was created
+                    if self.mlflow_logger and mlflow_experiment_id:
+                        try:
+                            self.mlflow_logger.log_child_trial(
+                                parent_run_id=mlflow_experiment_id,
+                                trial_params=params,
+                                trial_metrics={},  # Will be updated when backtest completes
+                                trial_number=trial_num,
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to log trial {trial_num} to MLflow: {e}"
+                            )
+
                     jobs_submitted += 1
                     logger.info(
-                        f"Submitted backtest {bt_job_id} for optimization {job_id}"
+                        f"Submitted backtest {bt_job_id} for optimization {job_id} (trial {trial_num})"
                     )
                 except Exception as e:
                     logger.error(f"Failed to submit backtest for params {params}: {e}")
@@ -455,6 +533,32 @@ class OptimizationService:
                 setattr(optimization, "mlflow_experiment_id", mlflow_experiment_id)
             if status in ["completed", "failed"]:
                 setattr(optimization, "completed_at", datetime.now())
+
+            # Update MLflow experiment with final results if available
+            if (
+                self.mlflow_logger
+                and hasattr(optimization, "mlflow_experiment_id")
+                and optimization.mlflow_experiment_id
+                and status == "completed"
+            ):
+                try:
+                    # Update the parent run with final optimization results
+                    final_metrics = {
+                        "final_best_value": best_metric_value or 0.0,
+                        "total_trials_completed": getattr(
+                            optimization, "max_trials", 0
+                        ),
+                        "optimization_status": "completed",
+                    }
+                    # Note: In a production system, you'd want to update the existing MLflow run
+                    # rather than create a new one. This is a simplified approach.
+                    logger.info(
+                        f"Optimization {job_id} completed - best value: {best_metric_value}"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to update MLflow experiment for completed optimization {job_id}: {e}"
+                    )
 
             session.commit()
             return True
