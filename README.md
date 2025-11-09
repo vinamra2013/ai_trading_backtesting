@@ -731,9 +731,27 @@ docker compose logs ib-gateway  # IB Gateway logs
 
 ### External Access Configuration
 
-When accessing the Streamlit dashboard from outside localhost, configure the backend URL:
+When accessing the Streamlit dashboard from outside localhost, configure the backend URL in your `.env` file:
 
-**Environment Variable:**
+**1. Edit your .env file:**
+```bash
+nano .env
+```
+
+**2. Add the backend URL:**
+```bash
+# Replace YOUR_SERVER_IP with your actual server IP/domain
+FASTAPI_BACKEND_URL=http://192.168.1.100:8230
+# Or for domain:
+FASTAPI_BACKEND_URL=http://my-trading-server.com:8230
+```
+
+**3. Restart Streamlit:**
+```bash
+streamlit run monitoring/app.py
+```
+
+**Alternative: Environment Variable**
 ```bash
 export FASTAPI_BACKEND_URL=http://your-server-ip:8230
 streamlit run monitoring/app.py
@@ -749,7 +767,7 @@ environment:
 The API client automatically detects the environment:
 - **Docker**: Uses `fastapi-backend:8230` (service name)
 - **Local**: Uses `localhost:8230`
-- **External**: Uses configured URL from `FASTAPI_BACKEND_URL`
+- **External**: Uses configured URL from `.env` or `FASTAPI_BACKEND_URL` environment variable
 
 **10 Interactive Tabs**:
 
