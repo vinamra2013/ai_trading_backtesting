@@ -84,6 +84,16 @@ from backend.routers.analytics import router as analytics_router
 
 app.include_router(analytics_router, prefix="/api", tags=["analytics"])
 
+# Import and include discovery router
+from backend.routers.discovery import router as discovery_router
+
+app.include_router(discovery_router, prefix="/api/discovery", tags=["discovery"])
+
+# Import and include ranking router
+from backend.routers.ranking import router as ranking_router
+
+app.include_router(ranking_router, prefix="/api/ranking", tags=["ranking"])
+
 
 @app.get("/")
 async def root():

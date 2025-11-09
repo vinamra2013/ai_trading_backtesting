@@ -8,6 +8,12 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 
 from backend.models.backtest import Base, Backtest, Optimization, AnalyticsCache
+from backend.models.discovery import (
+    DiscoveryJob,
+    DiscoveryResult,
+    RankingJob,
+    RankingResult,
+)
 
 
 class DatabaseManager:

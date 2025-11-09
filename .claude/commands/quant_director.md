@@ -390,47 +390,24 @@ for symbol in "${SYMBOLS[@]}"; do
 done
 ```
 
-**Batch Backtesting** (for portfolio construction):
-```bash
-# Define symbols and strategies
-SYMBOLS="AAPL MSFT NVDA GOOGL AMZN WMT KO UNH"
-STRATEGIES="/app/strategies/sma_crossover.py /app/strategies/rsi_momentum.py /app/strategies/macd_crossover.py"
-
-# Run backtests for all combinations (sequential - Daily data)
-for symbol in $SYMBOLS; do
-  for strategy in $STRATEGIES; do
-    docker exec -e PYTHONPATH=/app backtrader-engine \
-      python /app/scripts/run_backtest.py \
-      --strategy $strategy \
-      --symbols $symbol \
-      --start 2020-01-01 \
-      --end 2024-12-31
-  done
+# High-frequency batch backtests via API
+HIGH_FREQ_SYMBOLS=("SPY" "QQQ" "NVDA" "TSLA")
+for symbol in "${HIGH_FREQ_SYMBOLS[@]}"; do
+  curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+    -H "Content-Type: application/json" \
+    -d "{\"strategy\": \"sma_crossover\", \"symbols\": [\"$symbol\"], \"start_date\": \"2025-10-07\", \"end_date\": \"2025-10-14\", \"resolution\": \"1m\"}" &
 done
 
-# Run high-frequency backtests (1-minute data)
-HIGH_FREQ_SYMBOLS="SPY QQQ NVDA TSLA"
-for symbol in $HIGH_FREQ_SYMBOLS; do
-  docker exec -e PYTHONPATH=/app backtrader-engine \
-    python /app/scripts/run_backtest.py \
-    --strategy /app/strategies/sma_crossover.py \
-    --symbols $symbol \
-    --start 2025-10-07 \
-    --end 2025-10-14 \
-    --resolution 1m
-done
-```
-
-**Results Validation**:
+**Results Validation** (via API):
 ```bash
-# Count completed backtests
-find results/backtests -name "*.json" -type f | wc -l
+# Get list of completed backtests
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests" | jq '.[] | {id: .id, status: .status, strategy: .strategy, symbol: .symbols[0]}'
 
-# Check latest backtest results
-ls -lht results/backtests/*.json | head -10
+# Get specific backtest results
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/{job_id}" | jq '.performance'
 
-# Sample backtest metrics
-jq '{strategy: .strategy.name, symbol: .configuration.symbols[0], return: .performance.total_return_pct, sharpe: .performance.sharpe_ratio}' results/backtests/*.json | head -20
+# Get portfolio analytics with rankings
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.strategy_rankings[] | {strategy: .strategy, symbol: .symbol, sharpe: .sharpe_ratio, return: .total_return_pct}'
 ```
 
 #### Phase 3: Strategy Ranking

@@ -78,11 +78,16 @@ docker exec backtrader-engine python /app/scripts/ib_connection.py
 # Download historical data (request from developer)
 # Request: "Please download historical data for SPY, AAPL from 2024-01-01 to 2024-12-31 in Daily resolution"
 
-# Run backtest
-source venv/bin/activate
- python scripts/run_backtest.py \
-   --strategy strategies.sma_crossover.SMACrossover \
-   --symbols SPY --start 2024-01-01 --end 2024-12-31
+# Run backtest via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameters": {"fast_period": 10, "slow_period": 20},
+    "start_date": "2024-01-01",
+    "end_date": "2024-12-31"
+  }'
 ```
 
 ### MLflow Experiment Tracking (Epic 17)
@@ -335,24 +340,34 @@ docker exec backtrader-engine python /app/scripts/portfolio_analytics.py \
 **Status**: ✅ Implemented - Rolling window out-of-sample validation with distributed parallel execution.
 
 ```bash
-# Run inside Docker container (Daily data)
-docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/run_backtest.py \
-  --strategy strategies/sma_crossover.py \
-  --symbols SPY \
-  --start 2020-01-01 \
-  --end 2024-12-31 \
-  --mlflow \
-  --project Q1_2025 \
-  --asset-class Equities \
-  --strategy-family MeanReversion
+# Submit backtest with MLflow tracking via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameters": {"fast_period": 10, "slow_period": 20},
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31",
+    "mlflow_project": "Q1_2025",
+    "mlflow_asset_class": "Equities",
+    "mlflow_strategy_family": "MeanReversion"
+  }'
 
-# Run high-frequency backtest (1-minute data)
-docker exec -e PYTHONPATH=/app backtrader-engine python /app/scripts/run_backtest.py \
-  --strategy strategies/sma_crossover.py \
-  --symbols SPY \
-  --start 2025-10-07 \
-  --end 2025-10-14 \
-  --resolution 1m \
+# High-frequency backtest via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameters": {"fast_period": 10, "slow_period": 20},
+    "start_date": "2025-10-07",
+    "end_date": "2025-10-14",
+    "resolution": "1m",
+    "mlflow_project": "HighFreq_2025",
+    "mlflow_asset_class": "Equities",
+    "mlflow_strategy_family": "MeanReversion"
+  }'
   --mlflow \
   --project Q1_2025 \
   --asset-class Equities \
@@ -664,15 +679,20 @@ Strategies use Backtrader's native features:
 
 ### Run Backtest
 
-Use [scripts/run_backtest.py](scripts/run_backtest.py) for programmatic execution:
+Use FastAPI backend for programmatic execution:
 
 ```bash
-source venv/bin/activate
-python scripts/run_backtest.py \
-  --strategy strategies.sma_crossover.SMACrossover \
-  --start 2020-01-01 --end 2024-12-31 \
-  --cash 100000 \
-  --symbols SPY
+# Submit backtest job via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "sma_crossover",
+    "symbols": ["SPY"],
+    "parameters": {"fast_period": 10, "slow_period": 20},
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31",
+    "initial_cash": 100000
+  }'
 ```
 
 Results saved to `results/backtests/{uuid}.json` with:
@@ -963,9 +983,15 @@ While Claude Code automatically delegates when appropriate, you can explicitly r
 
 2. **Test via backtest**:
    ```bash
-   python scripts/run_backtest.py \
-     --strategy strategies.my_strategy.MyStrategy \
-     --symbols SPY --start 2020-01-01 --end 2024-12-31
+   curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "strategy": "my_strategy",
+       "symbols": ["SPY"],
+       "parameters": {},
+       "start_date": "2020-01-01",
+       "end_date": "2024-12-31"
+     }'
    ```
 
 3. **Deploy to live trading**:
@@ -1041,8 +1067,17 @@ Enable debug logging in scripts:
 # Set environment variable
 export DEBUG=1
 
-# Run with verbose output
-python scripts/run_backtest.py --strategy strategies.my_strategy.MyStrategy --symbols SPY --start 2020-01-01 --end 2024-12-31 --verbose
+# Run with verbose output via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": "my_strategy",
+    "symbols": ["SPY"],
+    "parameters": {},
+    "start_date": "2020-01-01",
+    "end_date": "2024-12-31",
+    "verbose": true
+  }'
 ```
 
 ## Performance Best Practices
@@ -1068,10 +1103,10 @@ python scripts/run_backtest.py --strategy strategies.my_strategy.MyStrategy --sy
 - Download data: Request developer to download data (specify symbols, dates, resolution, format)
 - Download 1-min data: Request developer to download 1-minute data (specify symbols, date range)
 - Symbol discovery: `python scripts/symbol_discovery.py --scanner high_volume --output csv`
-- Run backtest (Daily): `python scripts/run_backtest.py --strategy strategies.sma_crossover.SMACrossover --symbols SPY --start 2020-01-01 --end 2024-12-31`
-- Run backtest (1-min): `docker exec backtrader-engine python /app/scripts/run_backtest.py --strategy strategies.sma_crossover.py --symbols SPY --start 2025-10-07 --end 2025-10-14 --resolution 1m`
-- Strategy ranking: `docker exec backtrader-engine python /app/scripts/strategy_ranker.py --csv-input results/parallel_backtests.csv --output rankings.csv --top-n 15`
-- Portfolio optimization: `docker exec backtrader-engine python /app/scripts/portfolio_optimizer.py --strategies rankings.csv --output portfolio_allocation.csv --method equal_weight`
+- Run backtest (Daily): `curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" -H "Content-Type: application/json" -d '{"strategy": "sma_crossover", "symbols": ["SPY"], "start_date": "2020-01-01", "end_date": "2024-12-31"}'`
+- Run backtest (1-min): `curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" -H "Content-Type: application/json" -d '{"strategy": "sma_crossover", "symbols": ["SPY"], "start_date": "2025-10-07", "end_date": "2025-10-14", "resolution": "1m"}'`
+- Strategy ranking: `curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.strategy_rankings'`
+- Portfolio optimization: `curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.portfolio_statistics'`
 - Live trading: `./scripts/start_live_trading.sh`
 - Emergency stop: `./scripts/emergency_stop.sh`
 - View dashboard: `http://localhost:8501`
