@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class APIClient:
     """Client for communicating with FastAPI backend"""
 
-    def __init__(self, base_url: str = "http://localhost:8000", timeout: int = 30):
+    def __init__(self, base_url: str = "http://localhost:8230", timeout: int = 30):
         """
         Initialize API client
 
