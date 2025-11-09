@@ -82,7 +82,7 @@ class OptimizationResponse(BaseModel):
     mlflow_experiment_id: Optional[str] = Field(
         None, description="MLflow experiment ID for tracking"
     )
-    created_at: datetime = Field(..., description="Job creation timestamp")
+    created_at: Optional[datetime] = Field(None, description="Job creation timestamp")
 
 
 class OptimizationStatus(BaseModel):

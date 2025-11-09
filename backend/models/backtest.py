@@ -59,6 +59,10 @@ class Optimization(Base):
     strategy_name = Column(String(255), nullable=False, index=True)
     parameter_space = Column(JSON, nullable=False)  # Parameter ranges for optimization
     objective_metric = Column(String(100), nullable=False, default="sharpe_ratio")
+    max_trials = Column(Integer, nullable=True)  # Maximum number of optimization trials
+    optimization_method = Column(
+        String(50), nullable=True, default="grid"
+    )  # grid, random, bayesian
 
     # Results
     status = Column(

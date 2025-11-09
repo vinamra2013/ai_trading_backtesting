@@ -64,7 +64,9 @@ class OptimizationService:
         self.mlflow_logger = None
         if MLFLOW_LOGGER_AVAILABLE:
             try:
-                self.mlflow_logger = MLflowBacktestLogger()
+                self.mlflow_logger = MLflowBacktestLogger(
+                    tracking_uri="http://172.25.0.6:5000"
+                )
                 logger.info("MLflow logger initialized for optimization tracking")
             except Exception as e:
                 logger.warning(f"Failed to initialize MLflow logger: {e}")
@@ -317,12 +319,23 @@ class OptimizationService:
         """
         session = self.db_manager.get_session()
         try:
-            # Find optimization by job_id pattern
-            optimization = (
-                session.query(Optimization)
-                .filter(Optimization.strategy_name.like(f"%{job_id}%"))
-                .first()
-            )
+            # Try to find by ID first (for job_id format like "opt_123")
+            optimization = None
+            if job_id.startswith("opt_") and job_id[4:].isdigit():
+                opt_id = int(job_id[4:])
+                optimization = (
+                    session.query(Optimization)
+                    .filter(Optimization.id == opt_id)
+                    .first()
+                )
+
+            # If not found by ID, try pattern matching on strategy_name
+            if not optimization:
+                optimization = (
+                    session.query(Optimization)
+                    .filter(Optimization.strategy_name.like(f"%{job_id}%"))
+                    .first()
+                )
 
             if not optimization:
                 return None

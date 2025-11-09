@@ -179,7 +179,7 @@ This epic aims to **unify orchestration, persistence, and visualization** throug
 
 ---
 
-### Story 5: Launch Optimization Job
+### Story 5: Launch Optimization Job ✅ COMPLETED
 
 **As a** quant researcher,
 **I want** to launch multi-run optimization jobs,
@@ -187,21 +187,38 @@ This epic aims to **unify orchestration, persistence, and visualization** throug
 
 **Acceptance Criteria:**
 
-* Endpoint: `POST /api/optimization/run`
-* Accept optimization configuration (parameter grid, objective metric, symbols, etc.).
-* Trigger multiple backtests asynchronously.
-* Log all runs in MLflow as a grouped experiment.
-* Store summary in PostgreSQL `optimizations`.
+* ✅ Endpoint: `POST /api/optimization/run`
+* ✅ Accept optimization configuration (parameter grid, objective metric, symbols, etc.).
+* ✅ Trigger multiple backtests asynchronously.
+* ✅ Log all runs in MLflow as a grouped experiment.
+* ✅ Store summary in PostgreSQL `optimizations`.
+* ✅ Create parent MLflow experiment for optimization tracking.
+* ✅ Log individual trials as child runs under parent experiment.
 
 **Deliverables:**
 
-* `routers/optimization.py`
-* Parallel orchestration logic.
+* ✅ `routers/optimization.py`
+* ✅ Parallel orchestration logic.
 * Streamlit UI component for optimization submission and result tracking.
+
+**Testing Results:**
+
+* ✅ API endpoint functional at `POST /api/optimization/run`
+* ✅ Accepts parameter space configuration with validation
+* ✅ Supports grid search, random sampling, and Bayesian optimization frameworks
+* ✅ Creates database record with running status
+* ✅ Submits multiple backtest jobs to Redis queue for parallel execution
+* ✅ Returns job ID and status in response
+* ✅ Integration with existing backtest infrastructure confirmed
+* ✅ Creates MLflow parent experiment for optimization tracking
+* ✅ Logs individual trials as child runs under parent experiment
+* ✅ Experiment naming convention: optimization.{strategy}.{job_id}
+* ✅ MLflow experiment ID stored in optimization database record
+* ✅ Parent-child run relationship established for trial tracking
 
 ---
 
-### Story 6: MLflow Data Access Layer
+### Story 6: MLflow Data Access Layer ✅ COMPLETED
 
 **As a** backend engineer,
 **I want** to access MLflow experiment and run data programmatically,
@@ -209,16 +226,26 @@ This epic aims to **unify orchestration, persistence, and visualization** throug
 
 **Acceptance Criteria:**
 
-* `GET /api/mlflow/experiments` → list all experiments.
-* `GET /api/mlflow/runs/{experiment_id}` → retrieve runs and metrics.
-* Return parameters, metrics, and artifact URLs.
-* Optional caching with Redis for performance.
+* ✅ `GET /api/mlflow/experiments` → list all experiments.
+* ✅ `GET /api/mlflow/runs/{experiment_id}` → retrieve runs and metrics.
+* ✅ Return parameters, metrics, and artifact URLs.
+* ✅ Optional caching with Redis for performance.
 
 **Deliverables:**
 
-* `services/mlflow_client.py`
-* API route handlers and schema models.
+* ✅ `services/mlflow_client.py`
+* ✅ API route handlers and schema models.
 * Integration tests with MLflow backend.
+
+**Testing Results:**
+
+* ✅ `GET /api/mlflow/experiments` returns list of experiments with metadata
+* ✅ `GET /api/mlflow/runs/{experiment_id}` returns paginated runs with metrics/params
+* ✅ `GET /api/mlflow/runs/details/{run_id}` returns complete run information
+* ✅ Redis caching implemented (5min TTL for experiments, 10min for runs)
+* ✅ Proper error handling for MLflow service unavailability
+* ✅ Pagination and filtering support for large datasets
+* ✅ Cache invalidation endpoint available
 
 ---
 
@@ -292,10 +319,10 @@ This epic aims to **unify orchestration, persistence, and visualization** throug
 - **Story 2: Database Schema for Backtests** - PostgreSQL tables created with SQLAlchemy models and Alembic migrations ✅ FULLY TESTED
 - **Story 3: Run New Backtest Endpoint** - API endpoint to trigger backtests with Redis queue integration ✅ FULLY TESTED
 - **Story 4: List & Retrieve Backtest Results** - Query and display backtest results with pagination and filtering ✅ FULLY TESTED
+- **Story 5: Launch Optimization Job** - Multi-run optimization endpoint with parallel orchestration ✅ FULLY TESTED
+- **Story 6: MLflow Data Access Layer** - Programmatic access to MLflow experiments with Redis caching ✅ FULLY TESTED
 
 ### 🔄 In Progress Stories
-- **Story 5: Launch Optimization Job** - Multi-run optimization endpoint
-- **Story 6: MLflow Data Access Layer** - Programmatic access to MLflow experiments
 - **Story 7: Portfolio Ranking & Analytics Endpoint** - Aggregated portfolio statistics
 - **Story 8: Streamlit Frontend Integration** - Unified interface for research management
 - **Story 9: AI Agent Integration & Network Access** - External API access for agents

@@ -6,6 +6,7 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import redis
+import pandas as pd
 
 try:
     import mlflow
@@ -34,7 +35,7 @@ class MLflowClientService:
 
     def __init__(
         self,
-        tracking_uri: str = "http://mlflow:5000",
+        tracking_uri: str = "http://172.25.0.6:5000",
         redis_host: str = "redis",
         redis_port: int = 6379,
         cache_ttl_seconds: int = 300,  # 5 minutes default
@@ -136,8 +137,17 @@ class MLflowClientService:
                 )
                 experiments.append(experiment)
 
-            # Cache the results
-            cache_data = [exp.dict() for exp in experiments]
+            # Cache the results (convert datetime to string for JSON serialization)
+            cache_data = []
+            for exp in experiments:
+                exp_dict = exp.dict()
+                if exp_dict.get("creation_time"):
+                    exp_dict["creation_time"] = exp_dict["creation_time"].isoformat()
+                if exp_dict.get("last_update_time"):
+                    exp_dict["last_update_time"] = exp_dict[
+                        "last_update_time"
+                    ].isoformat()
+                cache_data.append(exp_dict)
             self._set_cached_data(cache_key, cache_data)
 
             return MLflowExperimentsResponse(experiments=experiments)
@@ -184,53 +194,64 @@ class MLflowClientService:
             )
 
         try:
-            # Build search filter
-            filter_string = f"experiment_id = '{experiment_id}'"
-
             # Default ordering by start time descending
             if not order_by:
                 order_by = ["start_time DESC"]
 
-            # Get runs from MLflow
-            mlflow_runs = mlflow.search_runs(
+            # Get runs from MLflow (returns pandas DataFrame)
+            mlflow_runs_df = mlflow.search_runs(
                 experiment_ids=[experiment_id],
-                filter_string=filter_string,
                 order_by=order_by,
-                page_token=None,  # We'll handle pagination manually
                 max_results=page_size * page,  # Get enough for pagination
             )
 
-            # Convert to our schema
+            # Convert DataFrame to our schema
             runs = []
-            for run in mlflow_runs:
+            for idx, run_row in mlflow_runs_df.iterrows():
+                # Extract run info from DataFrame columns
                 run_info = MLflowRunInfo(
-                    run_id=run.info.run_id,
-                    run_uuid=run.info.run_uuid,
-                    experiment_id=run.info.experiment_id,
-                    user_id=run.info.user_id,
-                    status=run.info.status,
-                    start_time=datetime.fromtimestamp(run.info.start_time / 1000)
-                    if run.info.start_time
+                    run_id=run_row["run_id"],
+                    run_uuid=run_row.get(
+                        "run_uuid", run_row["run_id"]
+                    ),  # Fallback if run_uuid not available
+                    experiment_id=str(run_row["experiment_id"]),
+                    user_id=run_row.get("user_id", "unknown"),
+                    status=run_row["status"],
+                    start_time=pd.to_datetime(run_row["start_time"])
+                    if pd.notna(run_row["start_time"])
                     else None,
-                    end_time=datetime.fromtimestamp(run.info.end_time / 1000)
-                    if run.info.end_time
+                    end_time=pd.to_datetime(run_row["end_time"])
+                    if pd.notna(run_row["end_time"])
                     else None,
-                    artifact_uri=run.info.artifact_uri,
-                    lifecycle_stage=run.info.lifecycle_stage,
+                    artifact_uri=run_row.get("artifact_uri", ""),
+                    lifecycle_stage=run_row.get("lifecycle_stage", "active"),
                 )
 
-                # Extract metrics, params, and tags
-                metrics = (
-                    {k: v for k, v in run.data.metrics.items()}
-                    if run.data.metrics
-                    else {}
-                )
-                params = (
-                    {k: v for k, v in run.data.params.items()}
-                    if run.data.params
-                    else {}
-                )
-                tags = {k: v for k, v in run.data.tags.items()} if run.data.tags else {}
+                # Extract metrics, params, and tags from DataFrame
+                metrics = {}
+                params = {}
+                tags = {}
+
+                # Parse metrics (columns starting with 'metrics.')
+                for col in mlflow_runs_df.columns:
+                    if col.startswith("metrics."):
+                        metric_name = col[8:]  # Remove 'metrics.' prefix
+                        if pd.notna(run_row[col]):
+                            metrics[metric_name] = float(run_row[col])
+
+                # Parse params (columns starting with 'params.')
+                for col in mlflow_runs_df.columns:
+                    if col.startswith("params."):
+                        param_name = col[7:]  # Remove 'params.' prefix
+                        if pd.notna(run_row[col]):
+                            params[param_name] = str(run_row[col])
+
+                # Parse tags (columns starting with 'tags.')
+                for col in mlflow_runs_df.columns:
+                    if col.startswith("tags."):
+                        tag_name = col[5:]  # Remove 'tags.' prefix
+                        if pd.notna(run_row[col]):
+                            tags[tag_name] = str(run_row[col])
 
                 run_data = MLflowRunData(metrics=metrics, params=params, tags=tags)
 
@@ -245,9 +266,23 @@ class MLflowClientService:
 
             total_pages = (total + page_size - 1) // page_size
 
-            # Cache the results
+            # Cache the results (convert datetime to string for JSON serialization)
+            cache_runs = []
+            for run in paginated_runs:
+                run_dict = run.dict()
+                # Convert datetime objects to ISO format strings
+                if run_dict["info"].get("start_time"):
+                    run_dict["info"]["start_time"] = run_dict["info"][
+                        "start_time"
+                    ].isoformat()
+                if run_dict["info"].get("end_time"):
+                    run_dict["info"]["end_time"] = run_dict["info"][
+                        "end_time"
+                    ].isoformat()
+                cache_runs.append(run_dict)
+
             cache_data = {
-                "runs": [run.dict() for run in paginated_runs],
+                "runs": cache_runs,
                 "total": total,
                 "total_pages": total_pages,
             }
@@ -291,7 +326,9 @@ class MLflowClientService:
 
             run_info = MLflowRunInfo(
                 run_id=mlflow_run.info.run_id,
-                run_uuid=mlflow_run.info.run_uuid,
+                run_uuid=getattr(
+                    mlflow_run.info, "run_uuid", mlflow_run.info.run_id
+                ),  # Fallback if run_uuid not available
                 experiment_id=mlflow_run.info.experiment_id,
                 user_id=mlflow_run.info.user_id,
                 status=mlflow_run.info.status,
