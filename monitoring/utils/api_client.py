@@ -22,16 +22,26 @@ class APIClient:
             timeout: Request timeout in seconds
         """
         if base_url is None:
+            # Load .env file if available
+            try:
+                from dotenv import load_dotenv
+
+                load_dotenv()
+            except ImportError:
+                # python-dotenv not available, continue with environment variables
+                pass
+
             # Auto-detect based on environment
             import os
 
-            # Check if running in Docker (service name available)
-            if os.path.exists("/.dockerenv") or os.environ.get("FASTAPI_BACKEND_URL"):
-                # Inside Docker or explicit URL set
-                backend_url = os.environ.get(
-                    "FASTAPI_BACKEND_URL", "http://fastapi-backend:8230"
-                )
-                self.base_url = backend_url.rstrip("/")
+            backend_url_env = os.environ.get("FASTAPI_BACKEND_URL")
+
+            if backend_url_env and backend_url_env.strip():
+                # Explicit URL set in .env or environment
+                self.base_url = backend_url_env.rstrip("/")
+            elif os.path.exists("/.dockerenv"):
+                # Inside Docker container
+                self.base_url = "http://fastapi-backend:8230"
             else:
                 # Local development
                 self.base_url = "http://localhost:8230"

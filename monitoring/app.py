@@ -42,9 +42,18 @@ def get_configured_api_client():
     """Get API client with proper configuration for current environment"""
     from utils.api_client import APIClient
 
-    # Check for explicit backend URL
+    # Load .env file if it exists
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        # python-dotenv not available, continue with environment variables
+        pass
+
+    # Check for explicit backend URL (from .env or environment)
     backend_url = os.environ.get("FASTAPI_BACKEND_URL")
-    if backend_url:
+    if backend_url and backend_url.strip():  # Check if not empty
         return APIClient(base_url=backend_url)
 
     # Auto-detect based on environment
