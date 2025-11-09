@@ -297,9 +297,9 @@ class VARM_RSI(BaseStrategy):
         # Multi-timeframe RSI indicators (if data available)
         self.rsi_1h = None
         self.rsi_4h = None
-        if self.data_1h:
+        if self.data_1h is not None:
             self.rsi_1h = bt.indicators.RSI(self.data_1h.close, period=14)
-        if self.data_4h:
+        if self.data_4h is not None:
             self.rsi_4h = bt.indicators.RSI(self.data_4h.close, period=14)
 
         # Market filter indicators

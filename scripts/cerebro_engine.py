@@ -19,9 +19,11 @@ from scripts.ib_commissions import load_commission_from_config, get_commission_s
 from scripts.backtrader_data_feeds import (
     load_csv_data,
     load_pandas_data,
-    load_databento_data,
 )
-from utils.data_cache import get_or_build_resampled_csv
+from utils.data_cache import (
+    get_or_build_resampled_csv,
+    get_or_build_multiple_resampled_csv,
+)
 
 
 class CerebroEngine:
@@ -137,14 +139,9 @@ class CerebroEngine:
         """
         # If string, assume CSV file
         if isinstance(dataname, str):
-            if resolution == "1m":
-                data = load_databento_data(
-                    dataname, fromdate=fromdate, todate=todate, name=name or "data"
-                )
-            else:
-                data = load_csv_data(
-                    dataname, fromdate=fromdate, todate=todate, name=name or "data"
-                )
+            data = load_csv_data(
+                dataname, fromdate=fromdate, todate=todate, name=name or "data"
+            )
         # If already a DataFeed, use directly
         elif isinstance(dataname, bt.DataBase):
             data = dataname
@@ -199,8 +196,26 @@ class CerebroEngine:
     ) -> set[str]:
         names: set[str] = {"1m"}
 
-        params = getattr(strategy_class, "params", ())
-        if isinstance(params, (tuple, list)):
+        # Check Backtrader strategy parameters
+        params = getattr(strategy_class, "params", None)
+        if params and hasattr(params, "_getkeys"):
+            param_names = params._getkeys()
+            for param_name in param_names:
+                param_lower = param_name.lower()
+                if (
+                    "5m" in param_lower
+                    or "primary_timeframe_compression" in param_lower
+                ):
+                    names.add("5m")
+                if "1h" in param_lower or "hour" in param_lower:
+                    names.add("1h")
+                if "4h" in param_lower:
+                    names.add("4h")
+                if "daily" in param_lower:
+                    names.add("1d")
+
+        # Fallback: check for old-style parameter tuples
+        elif isinstance(params, (tuple, list)):
             for p in params:
                 if not p:
                     continue
@@ -218,6 +233,7 @@ class CerebroEngine:
                 if "daily" in key:
                     names.add("1d")
 
+        # Check for data attributes in the class
         for attr in dir(strategy_class):
             la = attr.lower()
             if "data_1h" in la:
@@ -366,18 +382,23 @@ class CerebroEngine:
                     resolution="1m",
                 )
 
-            for tf in sorted(required_timeframes):
-                if tf == "1m":
-                    continue
-                resampled_path = get_or_build_resampled_csv(Path(csv_file), symbol, tf)
-                tf_res = "Daily" if tf == "1d" else "1m"
-                self.add_data(
-                    str(resampled_path),
-                    name=f"{symbol}_{tf}",
-                    fromdate=fromdate,
-                    todate=todate,
-                    resolution=tf_res,
+            # Process multiple timeframes in parallel for better performance
+            cache_timeframes = [tf for tf in required_timeframes if tf != "1m"]
+            if cache_timeframes:
+                resampled_paths = get_or_build_multiple_resampled_csv(
+                    Path(csv_file), symbol, cache_timeframes
                 )
+
+                for tf in sorted(cache_timeframes):
+                    resampled_path = resampled_paths[tf]
+                    tf_res = "Daily" if tf == "1d" else "1m"
+                    self.add_data(
+                        str(resampled_path),
+                        name=f"{symbol}_{tf}",
+                        fromdate=fromdate,
+                        todate=todate,
+                        resolution=tf_res,
+                    )
 
     def run(self) -> List:
         """

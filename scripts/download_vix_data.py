@@ -54,8 +54,8 @@ def download_vix_data(
     if isinstance(vix_data.columns, pd.MultiIndex):
         vix_data.columns = vix_data.columns.droplevel(1)
 
-    # Prepare data for CSV storage (Backtrader format)
-    # Backtrader expects: datetime,open,high,low,close,volume,openinterest
+    # Prepare data for CSV storage (standardized format)
+    # Standard format: datetime,open,high,low,close,volume
     csv_data = pd.DataFrame(
         {
             "datetime": vix_data.index.strftime("%Y-%m-%d %H:%M:%S"),
@@ -64,7 +64,6 @@ def download_vix_data(
             "low": vix_data["Low"].round(2),
             "close": vix_data["Close"].round(2),
             "volume": vix_data["Volume"].fillna(0),  # VIX has no volume, fill with 0
-            "openinterest": 0,  # Not applicable for VIX
         }
     )
 
@@ -116,7 +115,7 @@ def main():
     parser.add_argument("--start", default="2020-01-01", help="Start date (YYYY-MM-DD)")
     parser.add_argument("--end", default="2025-01-01", help="End date (YYYY-MM-DD)")
     parser.add_argument(
-        "--output-dir", default="data/csv/Daily/VIX", help="Output directory"
+        "--output-dir", default="data/csv/VIX/Daily", help="Output directory"
     )
 
     args = parser.parse_args()
@@ -135,7 +134,7 @@ def main():
         print()
         print("🎯 VIX data ready for VARM-RSI strategy!")
         print(f"   File: {filepath}")
-        print("   Use IBCSVData or similar feed in Backtrader")
+        print("   Use CSVData feed in Backtrader")
 
 
 if __name__ == "__main__":

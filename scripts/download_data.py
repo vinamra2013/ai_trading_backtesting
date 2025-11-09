@@ -8,7 +8,7 @@ Replaces LEAN CLI with direct Interactive Brokers API calls
 Features:
 - Download historical market data from IB
 - Support for multiple symbols and date ranges
-- Organized folder structure: data/csv/resolution/symbol/
+- Organized folder structure: data/csv/symbol/resolution/
 - CSV output format (compatible with Backtrader)
 - Data quality validation
 - Resume capability for interrupted downloads
@@ -47,15 +47,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.ib_connection import IBConnectionManager
 
 # Setup logging
-log_dir = os.path.join(os.getcwd(), 'logs')
+log_dir = os.path.join(os.getcwd(), "logs")
 os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler(os.path.join(log_dir, 'data_download.log')),
-        logging.StreamHandler()
-    ]
+        logging.FileHandler(os.path.join(log_dir, "data_download.log")),
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -65,24 +65,24 @@ class DataDownloader:
 
     # Resolution mapping: user-friendly -> IB bar size
     RESOLUTION_MAP = {
-        'Daily': '1 day',
-        'Hour': '1 hour',
-        'Minute': '1 min',
-        '5Minute': '5 mins',
-        '15Minute': '15 mins',
-        '30Minute': '30 mins',
-        'Second': '1 secs',
+        "Daily": "1 day",
+        "Hour": "1 hour",
+        "Minute": "1 min",
+        "5Minute": "5 mins",
+        "15Minute": "15 mins",
+        "30Minute": "30 mins",
+        "Second": "1 secs",
     }
 
     # Duration mapping: user-friendly -> IB duration
     DURATION_MAP = {
-        'Daily': 'Y',      # Years for daily data
-        'Hour': 'M',       # Months for hourly data
-        'Minute': 'W',     # Weeks for minute data
-        '5Minute': 'W',
-        '15Minute': 'W',
-        '30Minute': 'W',
-        'Second': 'D',     # Days for second data
+        "Daily": "Y",  # Years for daily data
+        "Hour": "M",  # Months for hourly data
+        "Minute": "W",  # Weeks for minute data
+        "5Minute": "W",
+        "15Minute": "W",
+        "30Minute": "W",
+        "Second": "D",  # Days for second data
     }
 
     def __init__(self, env_file: str = ".env", client_id: int = 1):
@@ -98,9 +98,11 @@ class DataDownloader:
         self.client_id = client_id
         self.ib_manager = None
         # Use relative path or environment variable for data directory
-        data_folder = os.getenv('BACKTRADER_DATA_FOLDER', os.path.join(os.getcwd(), 'data'))
+        data_folder = os.getenv(
+            "BACKTRADER_DATA_FOLDER", os.path.join(os.getcwd(), "data")
+        )
         self.base_data_dir = Path(data_folder)
-        # Organized structure: data/csv/resolution/symbol/
+        # Organized structure: data/csv/symbol/resolution/
         self.output_dir = None  # Will be set per symbol/resolution
 
         logger.info(f"DataDownloader initialized. Base data dir: {self.base_data_dir}")
@@ -117,18 +119,18 @@ class DataDownloader:
 
         try:
             # Try to request market data for a simple contract - this will fail if data farms are broken
-            contract = Stock('SPY', 'SMART', 'USD')
+            contract = Stock("SPY", "SMART", "USD")
             self.ib_manager.ib.qualifyContracts(contract)
 
             # Request a small amount of historical data to test data farm connectivity
             bars = self.ib_manager.ib.reqHistoricalData(
                 contract,
-                endDateTime='',  # Empty string means current time
-                durationStr='1 D',  # 1 day
-                barSizeSetting='1 day',
-                whatToShow='TRADES',
+                endDateTime="",  # Empty string means current time
+                durationStr="1 D",  # 1 day
+                barSizeSetting="1 day",
+                whatToShow="TRADES",
                 useRTH=True,
-                timeout=10  # Reasonable timeout
+                timeout=10,  # Reasonable timeout
             )
 
             # If we get data back, data farms are working
@@ -136,7 +138,9 @@ class DataDownloader:
                 logger.info("✅ Data farm connections verified")
                 return True
             else:
-                logger.error("❌ No data returned from data farm test - data farms appear broken")
+                logger.error(
+                    "❌ No data returned from data farm test - data farms appear broken"
+                )
                 return False
 
         except Exception as e:
@@ -157,9 +161,11 @@ class DataDownloader:
         try:
             # Use localhost if running outside Docker, ib-gateway if inside
             if host is None:
-                host = os.getenv('IB_HOST', 'ib-gateway')
+                host = os.getenv("IB_HOST", "ib-gateway")
 
-            self.ib_manager = IBConnectionManager(host=host, client_id=client_id, readonly=True)
+            self.ib_manager = IBConnectionManager(
+                host=host, client_id=client_id, readonly=True
+            )
             success = self.ib_manager.connect()
 
             if success:
@@ -191,7 +197,9 @@ class DataDownloader:
             # Test connection by checking if we can get account info
             account = self.ib_manager.ib.accountSummary()
             if not account:
-                logger.warning("⚠️  IB connection appears broken - no account summary available")
+                logger.warning(
+                    "⚠️  IB connection appears broken - no account summary available"
+                )
                 return self._restart_gateway()
         except Exception as e:
             logger.warning(f"⚠️  IB connection test failed: {e}")
@@ -219,17 +227,22 @@ class DataDownloader:
         try:
             logger.warning("🔄 Restarting IB Gateway container...")
             result = subprocess.run(
-                ['docker', 'compose', 'restart', 'ib-gateway'],
+                ["docker", "compose", "restart", "ib-gateway"],
                 capture_output=True,
                 text=True,
                 timeout=60,
-                cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Run from project root
+                cwd=os.path.dirname(
+                    os.path.dirname(os.path.abspath(__file__))
+                ),  # Run from project root
             )
 
             if result.returncode == 0:
-                logger.info("✅ IB Gateway restarted successfully, waiting 30 seconds for initialization...")
+                logger.info(
+                    "✅ IB Gateway restarted successfully, waiting 30 seconds for initialization..."
+                )
                 # Wait for gateway to initialize
                 import time
+
                 time.sleep(30)
                 return True
             else:
@@ -251,7 +264,7 @@ class DataDownloader:
         data_type: str = "Trade",
         resolution: str = "Daily",
         exchange: str = "SMART",
-        currency: str = "USD"
+        currency: str = "USD",
     ) -> bool:
         """
         Download historical data from Interactive Brokers
@@ -275,7 +288,9 @@ class DataDownloader:
         # Check data farm connections immediately after connecting
         logger.info("Checking data farm connections...")
         if not self._check_data_farm_connection():
-            logger.error("❌ Data farm connections appear broken - cannot proceed with download")
+            logger.error(
+                "❌ Data farm connections appear broken - cannot proceed with download"
+            )
             logger.error("This usually means IB Gateway data farms are not available")
             return False
 
@@ -299,9 +314,15 @@ class DataDownloader:
         duration = self._calculate_duration(start_dt, end_dt, resolution)
 
         bar_size = self.RESOLUTION_MAP[resolution]
-        what_to_show = data_type.upper() if data_type.upper() in ['TRADES', 'MIDPOINT', 'BID', 'ASK'] else 'TRADES'
+        what_to_show = (
+            data_type.upper()
+            if data_type.upper() in ["TRADES", "MIDPOINT", "BID", "ASK"]
+            else "TRADES"
+        )
 
-        logger.info(f"Downloading {len(symbols)} symbols from {start_date} to {end_date}")
+        logger.info(
+            f"Downloading {len(symbols)} symbols from {start_date} to {end_date}"
+        )
         logger.info(f"Resolution: {resolution} ({bar_size}), Data Type: {what_to_show}")
 
         success_count = 0
@@ -323,11 +344,14 @@ class DataDownloader:
                 # Check for data farm warnings before making request
                 # Wait a moment for any warnings to appear
                 import time
+
                 time.sleep(1)
 
                 # Check if data farm connections are working
                 if not self._check_data_farm_connection():
-                    logger.error("❌ Data farm connection broken during download - aborting")
+                    logger.error(
+                        "❌ Data farm connection broken during download - aborting"
+                    )
                     return False
 
                 # Download historical bars
@@ -338,7 +362,7 @@ class DataDownloader:
                     barSizeSetting=bar_size,
                     whatToShow=what_to_show,
                     useRTH=True,  # Regular trading hours only
-                    formatDate=1   # String format
+                    formatDate=1,  # String format
                 )
 
                 if not bars:
@@ -353,7 +377,7 @@ class DataDownloader:
                     continue
 
                 # Filter by date range (convert datetime to date for comparison)
-                mask = (df['date'] >= start_dt.date()) & (df['date'] <= end_dt.date())
+                mask = (df["date"] >= start_dt.date()) & (df["date"] <= end_dt.date())
                 df = df[mask]
 
                 if len(df) == 0:
@@ -361,16 +385,20 @@ class DataDownloader:
                     continue
 
                 # Prepare for CSV export
-                df = df.rename(columns={'date': 'datetime'})  # type: ignore
-                df = df[['datetime', 'open', 'high', 'low', 'close', 'volume']]
-                df['datetime'] = pd.to_datetime(df['datetime']).dt.strftime('%Y-%m-%d %H:%M:%S')  # type: ignore
+                df = df.rename(columns={"date": "datetime"})  # type: ignore
+                df = df[["datetime", "open", "high", "low", "close", "volume"]]
+                df["datetime"] = pd.to_datetime(df["datetime"]).dt.strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )  # type: ignore
 
-                # Create organized folder structure: data/csv/resolution/symbol/
-                symbol_dir = self.base_data_dir / 'csv' / resolution / symbol
+                # Create organized folder structure: data/csv/symbol/resolution/
+                symbol_dir = self.base_data_dir / "csv" / symbol / resolution
                 symbol_dir.mkdir(parents=True, exist_ok=True)
 
                 # Save to CSV with date range in filename for clarity
-                date_suffix = f"_{start_date.replace('-', '')}_{end_date.replace('-', '')}"
+                date_suffix = (
+                    f"_{start_date.replace('-', '')}_{end_date.replace('-', '')}"
+                )
                 output_file = symbol_dir / f"{symbol}_{resolution}{date_suffix}.csv"
                 df.to_csv(output_file, index=False)
 
@@ -392,20 +420,31 @@ class DataDownloader:
                 logger.error(f"❌ Error downloading {symbol}: {type(e).__name__}: {e}")
 
                 # Detect data farm connection issues or timeouts
-                connection_issues = any(indicator in error_msg for indicator in [
-                    'farm', 'timeout', 'connection', 'broken', 'disconnected',
-                    'no security definition', 'market data farm', 'hmds'
-                ])
+                connection_issues = any(
+                    indicator in error_msg
+                    for indicator in [
+                        "farm",
+                        "timeout",
+                        "connection",
+                        "broken",
+                        "disconnected",
+                        "no security definition",
+                        "market data farm",
+                        "hmds",
+                    ]
+                )
 
                 if connection_issues:
                     logger.warning(f"⚠️  Connection issue detected: {e}")
                     # Attempt restart if not already tried for this session
-                    if not hasattr(self, '_restart_attempted'):
+                    if not hasattr(self, "_restart_attempted"):
                         self._restart_attempted = True
                         if self.check_and_restart_ib_gateway():
                             # Reconnect after restart
-                            if self.connect(host=os.getenv('IB_HOST', 'localhost')):
-                                logger.info("♻️  Reconnected after IB Gateway restart - retrying download...")
+                            if self.connect(host=os.getenv("IB_HOST", "localhost")):
+                                logger.info(
+                                    "♻️  Reconnected after IB Gateway restart - retrying download..."
+                                )
                                 # Retry this symbol
                                 continue
                             else:
@@ -424,10 +463,7 @@ class DataDownloader:
         return success_count == len(symbols)
 
     def _calculate_duration(
-        self,
-        start_dt: datetime,
-        end_dt: datetime,
-        resolution: str
+        self, start_dt: datetime, end_dt: datetime, resolution: str
     ) -> str:
         """
         Calculate IB duration string based on date range and resolution
@@ -444,7 +480,7 @@ class DataDownloader:
         days = delta.days
 
         # Map resolution to appropriate duration unit
-        if resolution == 'Daily':
+        if resolution == "Daily":
             # Daily data: use years or days
             if days > 365:
                 years = int(days / 365) + 1
@@ -452,7 +488,7 @@ class DataDownloader:
             else:
                 return f"{days} D"
 
-        elif resolution in ['Hour', '30Minute', '15Minute']:
+        elif resolution in ["Hour", "30Minute", "15Minute"]:
             # Hourly data: use months or weeks
             if days > 90:
                 months = int(days / 30) + 1
@@ -461,7 +497,7 @@ class DataDownloader:
                 weeks = int(days / 7) + 1
                 return f"{weeks} W"
 
-        elif resolution in ['Minute', '5Minute']:
+        elif resolution in ["Minute", "5Minute"]:
             # Minute data: use weeks or days
             if days > 14:
                 weeks = int(days / 7) + 1
@@ -485,7 +521,7 @@ class DataDownloader:
             bool: True if data passes quality checks
         """
         # Find the most recent file for this symbol/resolution
-        symbol_dir = self.base_data_dir / 'csv' / resolution / symbol
+        symbol_dir = self.base_data_dir / "csv" / resolution / symbol
         if not symbol_dir.exists():
             logger.error(f"Directory not found: {symbol_dir}")
             return False
@@ -504,10 +540,10 @@ class DataDownloader:
             return False
 
         try:
-            df = pd.read_csv(output_file, parse_dates=['datetime'])
+            df = pd.read_csv(output_file, parse_dates=["datetime"])
 
             # Check for required columns
-            required_cols = ['datetime', 'open', 'high', 'low', 'close', 'volume']
+            required_cols = ["datetime", "open", "high", "low", "close", "volume"]
             if not all(col in df.columns for col in required_cols):
                 logger.error(f"Missing required columns in {symbol}")
                 return False
@@ -518,20 +554,20 @@ class DataDownloader:
                 return False
 
             # Check OHLC consistency (high >= low, etc.)
-            if not (df['high'] >= df['low']).all():
+            if not (df["high"] >= df["low"]).all():
                 logger.error(f"OHLC inconsistency in {symbol}: high < low")
                 return False
 
-            if not ((df['high'] >= df['open']) & (df['high'] >= df['close'])).all():
+            if not ((df["high"] >= df["open"]) & (df["high"] >= df["close"])).all():
                 logger.error(f"OHLC inconsistency in {symbol}: high < open/close")
                 return False
 
-            if not ((df['low'] <= df['open']) & (df['low'] <= df['close'])).all():
+            if not ((df["low"] <= df["open"]) & (df["low"] <= df["close"])).all():
                 logger.error(f"OHLC inconsistency in {symbol}: low > open/close")
                 return False
 
             # Check for duplicate timestamps
-            if df['datetime'].duplicated().any():
+            if df["datetime"].duplicated().any():
                 logger.warning(f"Duplicate timestamps found in {symbol}")
                 return False
 
@@ -546,7 +582,7 @@ class DataDownloader:
         """
         List all available data files in the organized structure
         """
-        csv_dir = self.base_data_dir / 'csv'
+        csv_dir = self.base_data_dir / "csv"
         if not csv_dir.exists():
             logger.info("No data directory found")
             return
@@ -569,75 +605,74 @@ class DataDownloader:
                             dir_size = sum(file_sizes)
                             res_files += len(files)
                             res_size += dir_size
-                            logger.info(f"  📄 {symbol_dir.name}: {len(files)} file(s), {dir_size/1024/1024:.1f} MB")
+                            logger.info(
+                                f"  📄 {symbol_dir.name}: {len(files)} file(s), {dir_size / 1024 / 1024:.1f} MB"
+                            )
 
                 if res_files > 0:
-                    logger.info(f"  📊 {resolution_dir.name} total: {res_files} files, {res_size/1024/1024:.1f} MB")
+                    logger.info(
+                        f"  📊 {resolution_dir.name} total: {res_files} files, {res_size / 1024 / 1024:.1f} MB"
+                    )
                     total_files += res_files
                     total_size += res_size
 
         if total_files > 0:
-            logger.info(f"\n📈 Grand total: {total_files} files, {total_size/1024/1024:.1f} MB")
+            logger.info(
+                f"\n📈 Grand total: {total_files} files, {total_size / 1024 / 1024:.1f} MB"
+            )
 
 
 def main():
     """Command-line interface for data downloader"""
     parser = argparse.ArgumentParser(
-        description='Download historical market data from Interactive Brokers'
+        description="Download historical market data from Interactive Brokers"
     )
     parser.add_argument(
-        '--symbols',
-        nargs='+',
+        "--symbols",
+        nargs="+",
         required=True,
-        help='Stock symbols to download (e.g., SPY AAPL MSFT)'
+        help="Stock symbols to download (e.g., SPY AAPL MSFT)",
+    )
+    parser.add_argument("--start", required=True, help="Start date (YYYY-MM-DD)")
+    parser.add_argument("--end", required=True, help="End date (YYYY-MM-DD)")
+    parser.add_argument(
+        "--resolution",
+        default="Daily",
+        choices=[
+            "Daily",
+            "Hour",
+            "Minute",
+            "5Minute",
+            "15Minute",
+            "30Minute",
+            "Second",
+        ],
+        help="Data resolution (default: Daily)",
     )
     parser.add_argument(
-        '--start',
-        required=True,
-        help='Start date (YYYY-MM-DD)'
+        "--data-type",
+        default="Trade",
+        choices=["Trade", "Trades", "Midpoint", "Bid", "Ask"],
+        help="Data type (default: Trade)",
     )
     parser.add_argument(
-        '--end',
-        required=True,
-        help='End date (YYYY-MM-DD)'
+        "--exchange", default="SMART", help="Exchange code (default: SMART)"
     )
     parser.add_argument(
-        '--resolution',
-        default='Daily',
-        choices=['Daily', 'Hour', 'Minute', '5Minute', '15Minute', '30Minute', 'Second'],
-        help='Data resolution (default: Daily)'
+        "--currency", default="USD", help="Currency code (default: USD)"
     )
     parser.add_argument(
-        '--data-type',
-        default='Trade',
-        choices=['Trade', 'Trades', 'Midpoint', 'Bid', 'Ask'],
-        help='Data type (default: Trade)'
+        "--validate",
+        action="store_true",
+        help="Run data quality validation after download",
     )
     parser.add_argument(
-        '--exchange',
-        default='SMART',
-        help='Exchange code (default: SMART)'
+        "--client-id", type=int, default=10, help="IB client ID to use (default: 10)"
     )
     parser.add_argument(
-        '--currency',
-        default='USD',
-        help='Currency code (default: USD)'
-    )
-    parser.add_argument(
-        '--validate',
-        action='store_true',
-        help='Run data quality validation after download'
-    )
-    parser.add_argument(
-        '--client-id',
-        type=int,
-        default=10,
-        help='IB client ID to use (default: 10)'
-    )
-    parser.add_argument(
-        '--list-data',
-        action='store_true',
-        help='List all available data files and exit'
+        "--list-data",
+        action="store_true",
+        help="List all available data files and exit",
     )
 
     args = parser.parse_args()
@@ -665,7 +700,7 @@ def main():
             data_type=args.data_type,
             resolution=args.resolution,
             exchange=args.exchange,
-            currency=args.currency
+            currency=args.currency,
         )
 
         # Validate if requested
@@ -696,5 +731,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -11,7 +11,7 @@ Features:
 - Extract Databento zip files
 - Transform timestamp format from ISO to simple format
 - Match existing CSV column structure
-- Organize output in data/csv/resolution/symbol/ structure
+- Organize output in data/csv/symbol/timeframe/ structure
 - Validate data integrity
 
 Usage:
@@ -68,6 +68,8 @@ class DatabentoZipExtractor:
         self.zip_file = Path(zip_file)
         self.output_dir = Path(output_dir)
         self.extract_dir = self.zip_file.parent / f"{self.zip_file.stem}_extracted"
+        # Base CSV directory (data/csv)
+        self.base_csv_dir = self.output_dir.parent
 
         if not self.zip_file.exists():
             raise FileNotFoundError(f"Zip file not found: {self.zip_file}")
@@ -279,8 +281,18 @@ class DatabentoZipExtractor:
                     "%Y-%m-%d %H:%M:%S"
                 )
 
-            # Create symbol subdirectory
-            symbol_dir = self.output_dir / symbol
+            # Standardize to datetime,open,high,low,close,volume format
+            if "ts_event" in combined_df.columns:
+                combined_df = combined_df.rename(columns={"ts_event": "datetime"})
+                combined_df = combined_df[
+                    ["datetime", "open", "high", "low", "close", "volume"]
+                ]
+
+            # Extract timeframe from output directory (e.g., "1m" from "data/csv/1m")
+            timeframe = self.output_dir.name
+
+            # Create correct directory structure: data/csv/symbol/timeframe/
+            symbol_dir = self.base_csv_dir / symbol / timeframe
             symbol_dir.mkdir(parents=True, exist_ok=True)
 
             # Generate output filename with full date range
@@ -291,10 +303,10 @@ class DatabentoZipExtractor:
                 end_date = pd.to_datetime(combined_df["ts_event"].max()).strftime(
                     "%Y%m%d"
                 )
-                output_filename = f"{symbol}_1m_{start_date}_{end_date}.csv"
+                output_filename = f"{symbol}_{timeframe}_{start_date}_{end_date}.csv"
             else:
                 today = datetime.now().strftime("%Y%m%d")
-                output_filename = f"{symbol}_1m_{today}_{today}.csv"
+                output_filename = f"{symbol}_{timeframe}_{today}_{today}.csv"
 
             output_file = symbol_dir / output_filename
 

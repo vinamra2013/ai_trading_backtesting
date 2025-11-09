@@ -17,8 +17,7 @@ import numpy as np
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -86,10 +85,12 @@ class DataValidator:
 
             # Standardize column names
             df.columns = df.columns.str.lower()
-            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            required_cols = ["datetime", "open", "high", "low", "close", "volume"]
 
             if not all(col in df.columns for col in required_cols):
-                logger.warning(f"Missing required columns for {symbol}")
+                logger.warning(
+                    f"Missing required columns for {symbol}. Expected: {required_cols}"
+                )
                 return None
 
             return df
@@ -99,9 +100,7 @@ class DataValidator:
             return None
 
     def check_missing_dates(
-        self,
-        df: pd.DataFrame,
-        symbol: str
+        self, df: pd.DataFrame, symbol: str
     ) -> Tuple[int, List[str]]:
         """
         Check for missing trading days.
@@ -117,8 +116,8 @@ class DataValidator:
             return 0, []
 
         # Get date column (first column or index)
-        if 'date' in df.columns:
-            dates = pd.to_datetime(df['date'])
+        if "date" in df.columns:
+            dates = pd.to_datetime(df["date"])
         elif isinstance(df.index, pd.DatetimeIndex):
             dates = df.index
         else:
@@ -130,7 +129,9 @@ class DataValidator:
         expected_dates = pd.bdate_range(start=start, end=end)
 
         # Find missing dates
-        actual_dates = set(dates.dt.date if hasattr(dates, 'dt') else [d.date() for d in dates])
+        actual_dates = set(
+            dates.dt.date if hasattr(dates, "dt") else [d.date() for d in dates]
+        )
         expected_dates_set = set(expected_dates.date)
         missing = sorted(expected_dates_set - actual_dates)
 
@@ -155,16 +156,16 @@ class DataValidator:
 
         # Check High >= Open, Close, Low
         high_violations = (
-            (df['high'] < df['open']) |
-            (df['high'] < df['close']) |
-            (df['high'] < df['low'])
+            (df["high"] < df["open"])
+            | (df["high"] < df["close"])
+            | (df["high"] < df["low"])
         )
 
         # Check Low <= Open, Close, High
         low_violations = (
-            (df['low'] > df['open']) |
-            (df['low'] > df['close']) |
-            (df['low'] > df['high'])
+            (df["low"] > df["open"])
+            | (df["low"] > df["close"])
+            | (df["low"] > df["high"])
         )
 
         # Combine violations
@@ -183,15 +184,13 @@ class DataValidator:
         Returns:
             Tuple of (count of zero/negative volume bars, list of row indices)
         """
-        zero_volume = (df['volume'] <= 0)
+        zero_volume = df["volume"] <= 0
         zero_indices = df[zero_volume].index.tolist()
 
         return len(zero_indices), zero_indices[:10]
 
     def check_gaps(
-        self,
-        df: pd.DataFrame,
-        max_gap_days: int = 5
+        self, df: pd.DataFrame, max_gap_days: int = 5
     ) -> Tuple[int, List[Tuple[str, str, int]]]:
         """
         Check for gaps exceeding maximum allowed days.
@@ -207,8 +206,8 @@ class DataValidator:
             return 0, []
 
         # Get dates
-        if 'date' in df.columns:
-            dates = pd.to_datetime(df['date']).sort_values()
+        if "date" in df.columns:
+            dates = pd.to_datetime(df["date"]).sort_values()
         else:
             dates = pd.to_datetime(df.iloc[:, 0]).sort_values()
 
@@ -230,7 +229,7 @@ class DataValidator:
         missing_dates: int,
         ohlcv_violations: int,
         zero_volume_bars: int,
-        gaps: int
+        gaps: int,
     ) -> float:
         """
         Calculate overall quality score (0.0 to 1.0).
@@ -254,16 +253,14 @@ class DataValidator:
         volume_penalty = (zero_volume_bars / total_bars) * 0.2
         gap_penalty = (gaps / max(1, total_bars / 100)) * 0.1  # Normalize gaps
 
-        total_penalty = min(1.0, missing_penalty + ohlcv_penalty + volume_penalty + gap_penalty)
+        total_penalty = min(
+            1.0, missing_penalty + ohlcv_penalty + volume_penalty + gap_penalty
+        )
         quality_score = 1.0 - total_penalty
 
         return round(quality_score, 3)
 
-    def validate_symbol(
-        self,
-        symbol: str,
-        max_gap_days: int = 5
-    ) -> Dict:
+    def validate_symbol(self, symbol: str, max_gap_days: int = 5) -> Dict:
         """
         Run all quality checks for a symbol.
 
@@ -278,11 +275,7 @@ class DataValidator:
 
         df = self.load_symbol_data(symbol)
         if df is None:
-            return {
-                "symbol": symbol,
-                "status": "not_found",
-                "quality_score": 0.0
-            }
+            return {"symbol": symbol, "status": "not_found", "quality_score": 0.0}
 
         # Run checks
         total_bars = len(df)
@@ -308,7 +301,7 @@ class DataValidator:
             "zero_volume_sample": zero_vol_indices,
             "gaps": gap_count,
             "gaps_sample": gap_details,
-            "quality_score": quality_score
+            "quality_score": quality_score,
         }
 
         # Log summary
@@ -324,11 +317,7 @@ class DataValidator:
 
         return result
 
-    def validate(
-        self,
-        symbols: List[str],
-        max_gap_days: int = 5
-    ) -> Dict:
+    def validate(self, symbols: List[str], max_gap_days: int = 5) -> Dict:
         """
         Validate multiple symbols and generate report.
 
@@ -356,8 +345,12 @@ class DataValidator:
             "timestamp": datetime.now().isoformat(),
             "symbols": results,
             "overall_quality": round(overall_quality, 3),
-            "validated_count": len([r for r in results.values() if r["status"] == "validated"]),
-            "not_found_count": len([r for r in results.values() if r["status"] == "not_found"])
+            "validated_count": len(
+                [r for r in results.values() if r["status"] == "validated"]
+            ),
+            "not_found_count": len(
+                [r for r in results.values() if r["status"] == "not_found"]
+            ),
         }
 
 
@@ -370,34 +363,30 @@ def main():
         "--symbols",
         nargs="+",
         required=True,
-        help="Ticker symbols to validate (e.g., SPY AAPL MSFT)"
+        help="Ticker symbols to validate (e.g., SPY AAPL MSFT)",
     )
     parser.add_argument(
         "--data-dir",
         default="data",
-        help="Root directory containing data (default: data)"
+        help="Root directory containing data (default: data)",
     )
     parser.add_argument(
         "--max-gap-days",
         type=int,
         default=5,
-        help="Maximum allowed gap in trading days (default: 5)"
+        help="Maximum allowed gap in trading days (default: 5)",
     )
     parser.add_argument(
         "--report-format",
         choices=["json", "dict"],
         default="dict",
-        help="Output format (default: dict)"
+        help="Output format (default: dict)",
     )
     parser.add_argument(
         "--output",
-        help="Output file path (optional, prints to stdout if not specified)"
+        help="Output file path (optional, prints to stdout if not specified)",
     )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging"
-    )
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
 

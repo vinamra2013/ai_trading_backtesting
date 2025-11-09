@@ -3,7 +3,7 @@ Backtrader Data Feeds for IB Integration
 Epic 11: US-11.4 - Data Download Pipeline
 
 Provides custom Backtrader data feeds for:
-- CSV files (downloaded from IB)
+- Unified CSV data (standardized format: datetime,open,high,low,close,volume)
 - Live IB data streaming
 - Pandas DataFrame integration
 """
@@ -17,42 +17,24 @@ from ib_insync import IB, Stock, util
 from scripts.ib_connection import IBConnectionManager
 
 
-class IBCSVData(bt.feeds.GenericCSVData):
+class CSVData(bt.feeds.GenericCSVData):
     """
-    Custom CSV data feed for IB-downloaded data
+    Unified CSV data feed for standardized OHLCV data
 
-    Assumes CSV format from IB historical data downloads:
-    timestamp,open,high,low,close,volume
+    Assumes standardized CSV format:
+    datetime,open,high,low,close,volume
+
+    Works with data from IB downloads, Databento processing, and other sources
     """
 
     params = (
         ("dtformat", "%Y-%m-%d %H:%M:%S"),
-        ("datetime", 0),
-        ("open", 1),
-        ("high", 2),
-        ("low", 3),
-        ("close", 4),
-        ("volume", 5),
-        ("openinterest", -1),  # Not provided by IB
-    )
-
-
-class DatabentoCSVData(bt.feeds.GenericCSVData):
-    """
-    Custom CSV data feed for processed Databento 1-minute OHLCV data
-
-    Assumes CSV format from processed Databento data:
-    ts_event,rtype,publisher_id,instrument_id,open,high,low,close,volume,symbol
-    """
-
-    params = (
-        ("dtformat", "%Y-%m-%d %H:%M:%S"),  # Processed format: 2020-11-09 09:00:00
-        ("datetime", 0),  # ts_event column
-        ("open", 4),  # open column
-        ("high", 5),  # high column
-        ("low", 6),  # low column
-        ("close", 7),  # close column
-        ("volume", 8),  # volume column
+        ("datetime", 0),  # datetime column
+        ("open", 1),  # open column
+        ("high", 2),  # high column
+        ("low", 3),  # low column
+        ("close", 4),  # close column
+        ("volume", 5),  # volume column
         ("openinterest", -1),  # Not provided
     )
 
@@ -199,9 +181,11 @@ def load_csv_data(
     fromdate: Optional[datetime] = None,
     todate: Optional[datetime] = None,
     name: str = None,
-) -> IBCSVData:
+) -> CSVData:
     """
     Load CSV data file into Backtrader feed
+
+    Supports standardized CSV format: datetime,open,high,low,close,volume
 
     Args:
         filepath: Path to CSV file
@@ -210,43 +194,12 @@ def load_csv_data(
         name: Data feed name
 
     Returns:
-        IBCSVData: Configured data feed
+        CSVData: Configured data feed
     """
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"CSV file not found: {filepath}")
 
-    data = IBCSVData(
-        dataname=filepath,
-        fromdate=fromdate,
-        todate=todate,
-        name=name or os.path.basename(filepath),
-    )
-
-    return data
-
-
-def load_databento_data(
-    filepath: str,
-    fromdate: Optional[datetime] = None,
-    todate: Optional[datetime] = None,
-    name: str = None,
-) -> DatabentoCSVData:
-    """
-    Load Databento CSV data file into Backtrader feed
-
-    Args:
-        filepath: Path to Databento CSV file
-        fromdate: Start date filter
-        todate: End date filter
-        name: Data feed name
-
-    Returns:
-        DatabentoCSVData: Configured data feed
-    """
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"Databento CSV file not found: {filepath}")
-
-    data = DatabentoCSVData(
+    data = CSVData(
         dataname=filepath,
         fromdate=fromdate,
         todate=todate,
