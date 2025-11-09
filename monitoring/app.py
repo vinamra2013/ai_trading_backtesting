@@ -40,7 +40,7 @@ st.set_page_config(
 # API Client configuration
 def get_configured_api_client():
     """Get API client with proper configuration for current environment"""
-    from utils.api_client import APIClient
+    from monitoring.utils.api_client import APIClient
 
     # Load .env file if it exists
     try:
@@ -51,29 +51,31 @@ def get_configured_api_client():
         # python-dotenv not available, continue with environment variables
         pass
 
-    # Check for explicit backend URL (from .env or environment)
-    backend_url = os.environ.get("FASTAPI_BACKEND_URL")
-    if backend_url and backend_url.strip():  # Check if not empty
-        return APIClient(base_url=backend_url)
-
-    # Auto-detect based on environment
     return APIClient()
 
 
 # Job polling functionality
-@st.cache_data(ttl=5)
 def poll_job_status(job_id: str, job_type: str = "backtest") -> Dict[str, Any]:
-    """Poll job status with caching"""
+    """Poll job status"""
     try:
-        api_client = get_configured_api_client()
+        # Create a new API client instance to avoid any caching issues
+        from monitoring.utils.api_client import APIClient
+
+        api_client = APIClient()
 
         if job_type == "backtest":
-            return api_client.get_backtest_status(job_id)
+            result = api_client.get_backtest(int(job_id))
+            # Ensure we always return a dict
+            if result is None:
+                return {"status": "error", "error": "API returned None"}
+            return result
         elif job_type == "optimization":
             # For optimization, we need to get the full job data
-            return api_client.get_optimization(job_id)
+            return api_client.get_optimization(int(job_id))
         else:
             return {"status": "unknown", "error": f"Unknown job type: {job_type}"}
+    except ImportError as e:
+        return {"status": "error", "error": f"Import error: {e}"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -82,8 +84,9 @@ def check_backend_availability() -> bool:
     """Check if the FastAPI backend is available"""
     try:
         api_client = get_configured_api_client()
-        return api_client.is_available()
-    except Exception:
+        result = api_client.is_available()
+        return result
+    except Exception as e:
         return False
 
 
@@ -128,8 +131,14 @@ def get_mlflow_client():
         import mlflow
         from scripts.project_manager import ProjectManager
 
-        # Set MLflow tracking URI
-        mlflow.set_tracking_uri("http://mlflow:5000")
+        # Set MLflow tracking URI (configurable)
+        mlflow_tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+        if not mlflow_tracking_uri:
+            if os.path.exists("/.dockerenv"):
+                mlflow_tracking_uri = "http://mlflow:5000"
+            else:
+                mlflow_tracking_uri = "http://localhost:5000"
+        mlflow.set_tracking_uri(mlflow_tracking_uri)
 
         # Initialize ProjectManager
         pm = ProjectManager()
@@ -670,7 +679,22 @@ with tab5:
         api_client = get_configured_api_client()
 
         # Get portfolio analytics
-        analytics_data = api_client.get_portfolio_analytics()
+        try:
+            analytics_data = api_client.get_portfolio_analytics()
+        except Exception as api_error:
+            error_msg = str(api_error)
+            if "400" in error_msg and "insufficient data" in error_msg.lower():
+                st.info("📊 Analytics require completed backtests to display data.")
+                st.markdown("""
+                **To see analytics:**
+                1. Run some backtests using the **Backtests** tab
+                2. Wait for them to complete (status: ✅ Completed)
+                3. Return to this Analytics tab to view performance metrics
+                """)
+                st.stop()
+            else:
+                # Re-raise other API errors
+                raise api_error
 
         if analytics_data:
             # Display portfolio statistics
@@ -752,11 +776,25 @@ with tab5:
 
             if st.button("Apply Filters"):
                 if strategy_filter or symbol_filter:
-                    filtered_data = api_client.get_portfolio_analytics(
-                        strategy_filter=strategy_filter if strategy_filter else None,
-                        symbol_filter=symbol_filter if symbol_filter else None,
-                    )
-                    st.info("Filtered results applied above")
+                    try:
+                        filtered_data = api_client.get_portfolio_analytics(
+                            strategy_filter=strategy_filter
+                            if strategy_filter
+                            else None,
+                            symbol_filter=symbol_filter if symbol_filter else None,
+                        )
+                        st.info("Filtered results applied above")
+                    except Exception as filter_error:
+                        filter_error_msg = str(filter_error)
+                        if (
+                            "400" in filter_error_msg
+                            and "insufficient data" in filter_error_msg.lower()
+                        ):
+                            st.warning(
+                                "⚠️ No data available for the selected filters. Try different criteria or run more backtests."
+                            )
+                        else:
+                            st.error(f"Failed to apply filters: {filter_error_msg}")
                 else:
                     st.info("Please enter at least one filter")
         else:
@@ -798,23 +836,220 @@ with tab6:
             with bt_tab1:
                 st.subheader(f"All Backtests ({len(backtests)})")
 
-                # Convert to DataFrame for display
-                import pandas as pd
+                if backtests:
+                    # Initialize session state for selections
+                    if "selected_backtests" not in st.session_state:
+                        st.session_state.selected_backtests = []
 
-                bt_df = pd.DataFrame(backtests)
+                    # Convert to DataFrame for display
+                    import pandas as pd
 
-                # Display key columns
-                display_cols = ["id", "strategy_name", "status", "created_at"]
-                available_cols = [col for col in display_cols if col in bt_df.columns]
+                    bt_df = pd.DataFrame(backtests)
 
-                if available_cols:
-                    st.dataframe(bt_df[available_cols], use_container_width=True)
-                else:
-                    st.dataframe(bt_df, use_container_width=True)
+                    # Add paging
+                    page_size = 10
+                    total_pages = (len(bt_df) + page_size - 1) // page_size
 
-                # Add refresh button
-                if st.button("🔄 Refresh Backtests"):
-                    st.rerun()
+                    if "backtest_page" not in st.session_state:
+                        st.session_state.backtest_page = 1
+
+                    # Page controls
+                    col1, col2, col3 = st.columns([1, 2, 1])
+
+                    with col1:
+                        if st.button(
+                            "⬅️ Previous", disabled=st.session_state.backtest_page <= 1
+                        ):
+                            st.session_state.backtest_page -= 1
+                            st.rerun()
+
+                    with col2:
+                        page_options = list(range(1, total_pages + 1))
+                        selected_page = st.selectbox(
+                            f"Page {st.session_state.backtest_page} of {total_pages}",
+                            options=page_options,
+                            index=st.session_state.backtest_page - 1,
+                            key="page_selector",
+                        )
+                        if selected_page != st.session_state.backtest_page:
+                            st.session_state.backtest_page = selected_page
+                            st.rerun()
+
+                    with col3:
+                        if st.button(
+                            "Next ➡️",
+                            disabled=st.session_state.backtest_page >= total_pages,
+                        ):
+                            st.session_state.backtest_page += 1
+                            st.rerun()
+
+                    # Get current page data
+                    start_idx = (st.session_state.backtest_page - 1) * page_size
+                    end_idx = start_idx + page_size
+                    page_df = bt_df.iloc[start_idx:end_idx]
+
+                    # Selection controls
+                    st.markdown("---")
+                    col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
+
+                    with col1:
+                        select_all = st.checkbox(
+                            "Select All",
+                            value=len(st.session_state.selected_backtests)
+                            == len(page_df),
+                            key="select_all_backtests",
+                        )
+
+                    with col2:
+                        if st.button("🗑️ Delete Selected", type="secondary"):
+                            selected_ids = st.session_state.get(
+                                "selected_backtests", []
+                            )
+
+                            if not selected_ids:
+                                st.warning("Please select backtests to delete")
+                            else:
+                                # Confirm deletion
+                                confirm_key = (
+                                    f"confirm_delete_{st.session_state.backtest_page}"
+                                )
+                                if st.checkbox(
+                                    f"Confirm deletion of {len(selected_ids)} selected backtest(s)",
+                                    key=confirm_key,
+                                ):
+                                    try:
+                                        deleted_count = 0
+                                        for bt_id in selected_ids:
+                                            try:
+                                                api_client.delete_backtest(int(bt_id))
+                                                deleted_count += 1
+                                            except Exception as e:
+                                                st.error(
+                                                    f"Failed to delete backtest {bt_id}: {e}"
+                                                )
+
+                                        if deleted_count > 0:
+                                            st.success(
+                                                f"Successfully deleted {deleted_count} backtest(s)"
+                                            )
+                                            # Clear selections and refresh
+                                            st.session_state.selected_backtests = []
+                                            st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error during deletion: {e}")
+
+                    with col3:
+                        selected_count = len(st.session_state.selected_backtests)
+                        if selected_count > 0:
+                            st.info(f"Selected {selected_count} backtest(s)")
+
+                    with col4:
+                        if st.button("🔄 Refresh"):
+                            st.session_state.selected_backtests = []
+                            st.rerun()
+
+                    # Handle select all
+                    if select_all:
+                        page_ids = [str(row["id"]) for _, row in page_df.iterrows()]
+                        st.session_state.selected_backtests = list(
+                            set(st.session_state.selected_backtests + page_ids)
+                        )
+                    else:
+                        # Remove page items from selection if unchecked
+                        page_ids = [str(row["id"]) for _, row in page_df.iterrows()]
+                        st.session_state.selected_backtests = [
+                            bt_id
+                            for bt_id in st.session_state.selected_backtests
+                            if bt_id not in page_ids
+                        ]
+
+                    st.markdown("---")
+
+                    # Display backtests with compact rows
+                    st.write("### Backtest List")
+
+                    # Header row
+                    header_cols = st.columns([0.5, 1, 2, 1, 2])
+                    with header_cols[0]:
+                        st.markdown("**Select**")
+                    with header_cols[1]:
+                        st.markdown("**ID**")
+                    with header_cols[2]:
+                        st.markdown("**Strategy**")
+                    with header_cols[3]:
+                        st.markdown("**Status**")
+                    with header_cols[4]:
+                        st.markdown("**Created**")
+
+                    st.markdown("---")
+
+                    # Data rows with compact spacing
+                    for idx, row in page_df.iterrows():
+                        row_cols = st.columns([0.5, 1, 2, 1, 2])
+
+                        with row_cols[0]:
+                            bt_id = str(row["id"])
+                            is_selected = st.checkbox(
+                                "",
+                                value=bt_id in st.session_state.selected_backtests,
+                                key=f"select_{bt_id}_{st.session_state.backtest_page}",
+                                label_visibility="collapsed",
+                            )
+
+                            # Update session state based on checkbox
+                            if (
+                                is_selected
+                                and bt_id not in st.session_state.selected_backtests
+                            ):
+                                st.session_state.selected_backtests.append(bt_id)
+                            elif (
+                                not is_selected
+                                and bt_id in st.session_state.selected_backtests
+                            ):
+                                st.session_state.selected_backtests.remove(bt_id)
+
+                        with row_cols[1]:
+                            st.markdown(f"`{row['id']}`")
+
+                        with row_cols[2]:
+                            st.markdown(
+                                f"**{row['strategy_name'][:30]}{'...' if len(row['strategy_name']) > 30 else ''}**"
+                            )
+
+                        with row_cols[3]:
+                            status = row["status"]
+                            if status == "completed":
+                                st.markdown("✅")
+                            elif status == "running":
+                                st.markdown("🔄")
+                            elif status == "failed":
+                                st.markdown("❌")
+                            else:
+                                st.markdown(status)
+
+                        with row_cols[4]:
+                            created_at = row.get("created_at", "N/A")
+                            if created_at != "N/A":
+                                if isinstance(created_at, str):
+                                    try:
+                                        from datetime import datetime
+
+                                        dt = datetime.fromisoformat(
+                                            created_at.replace("Z", "+00:00")
+                                        )
+                                        st.markdown(dt.strftime("%m/%d %H:%M"))
+                                    except:
+                                        st.markdown(str(created_at)[:10])
+                                else:
+                                    st.markdown(str(created_at)[:10])
+                            else:
+                                st.markdown("N/A")
+
+                        # Thin divider
+                        st.markdown(
+                            '<hr style="margin: 2px 0; border: none; border-top: 1px solid #ddd;">',
+                            unsafe_allow_html=True,
+                        )
 
             with bt_tab2:
                 st.subheader("Backtest Detail View")
@@ -822,7 +1057,7 @@ with tab6:
                 # Select backtest
                 if backtests:
                     backtest_options = {
-                        f"{bt['id'][:8]} - {bt['strategy_name']} ({bt['status']})": bt[
+                        f"{str(bt['id'])[:8]} - {bt['strategy_name']} ({bt['status']})": bt[
                             "id"
                         ]
                         for bt in backtests
@@ -835,56 +1070,70 @@ with tab6:
 
                     if selected_bt_id:
                         bt_id = backtest_options[selected_bt_id]
-                        bt_data = api_client.get_backtest(bt_id)
+                        try:
+                            bt_data = api_client.get_backtest(int(bt_id))
+                        except Exception as e:
+                            st.error(f"Failed to load backtest details: {e}")
+                            bt_data = None
 
                         if bt_data:
-                            # Display metrics
-                            col1, col2, col3, col4 = st.columns(4)
+                            try:
+                                # Display metrics
+                                col1, col2, col3, col4 = st.columns(4)
 
-                            metrics = bt_data.get("metrics", {})
+                                metrics = bt_data.get("metrics", {})
 
-                            with col1:
-                                st.metric(
-                                    "Strategy", bt_data.get("strategy_name", "N/A")
-                                )
-                            with col2:
-                                status = bt_data.get("status", "N/A")
-                                if status == "running":
-                                    st.metric("Status", "🔄 Running")
-                                elif status == "completed":
-                                    st.metric("Status", "✅ Completed")
-                                elif status == "failed":
-                                    st.metric("Status", "❌ Failed")
-                                else:
-                                    st.metric("Status", status)
-                            with col3:
-                                total_return = metrics.get("total_return", 0)
-                                st.metric("Total Return", f"{total_return:.2f}%")
-                            with col4:
-                                sharpe = metrics.get("sharpe_ratio", 0)
-                                st.metric("Sharpe Ratio", f"{sharpe:.2f}")
+                                with col1:
+                                    st.metric(
+                                        "Strategy", bt_data.get("strategy_name", "N/A")
+                                    )
+                                with col2:
+                                    status = bt_data.get("status", "N/A")
+                                    if status == "running":
+                                        st.metric("Status", "🔄 Running")
+                                    elif status == "completed":
+                                        st.metric("Status", "✅ Completed")
+                                    elif status == "failed":
+                                        st.metric("Status", "❌ Failed")
+                                    else:
+                                        st.metric("Status", status)
+                                with col3:
+                                    total_return = metrics.get("total_return", 0)
+                                    st.metric("Total Return", f"{total_return:.2f}%")
+                                with col4:
+                                    sharpe = metrics.get("sharpe_ratio", 0)
+                                    st.metric("Sharpe Ratio", f"{sharpe:.2f}")
 
-                            # Progress indicator for running jobs
-                            if bt_data.get("status") == "running":
-                                # Poll for updated status
-                                job_status = poll_job_status(bt_id, "backtest")
-                                if job_status.get("status") == "completed":
-                                    st.success("✅ Backtest completed!")
-                                    st.rerun()
-                                elif job_status.get("status") == "failed":
-                                    st.error("❌ Backtest failed!")
-                                else:
-                                    st.progress(0.5, text="Backtest in progress...")
-                                    st.info("🔄 Refreshing status automatically...")
+                                # Progress indicator for running jobs
+                                if bt_data.get("status") == "running":
+                                    # Poll for updated status
+                                    job_status = poll_job_status(bt_id, "backtest")
+                                    if (
+                                        job_status
+                                        and job_status.get("status") == "completed"
+                                    ):
+                                        st.success("✅ Backtest completed!")
+                                        st.rerun()
+                                    elif (
+                                        job_status
+                                        and job_status.get("status") == "failed"
+                                    ):
+                                        st.error("❌ Backtest failed!")
+                                    else:
+                                        st.progress(0.5, text="Backtest in progress...")
+                                        st.info("🔄 Refreshing status automatically...")
 
-                            # Add manual refresh for completed jobs
-                            if bt_data.get("status") in ["completed", "failed"]:
-                                if st.button("🔄 Refresh Status"):
-                                    st.rerun()
+                                # Add manual refresh for completed jobs
+                                if bt_data.get("status") in ["completed", "failed"]:
+                                    if st.button("🔄 Refresh Status"):
+                                        st.rerun()
 
-                            # Display full data
-                            with st.expander("Full Backtest Data"):
-                                st.json(bt_data)
+                                # Display full data
+                                with st.expander("Full Backtest Data"):
+                                    st.json(bt_data)
+                            except Exception as e:
+                                st.error(f"Error displaying backtest details: {e}")
+                                st.json(bt_data)  # Show raw data for debugging
                         else:
                             st.error("Failed to load backtest details")
 
@@ -1156,7 +1405,8 @@ with tab7:
 
             try:
                 # Get list of optimizations
-                optimizations = api_client.list_optimizations()
+                optimizations_response = api_client.list_optimizations()
+                optimizations = optimizations_response.get("optimizations", [])
 
                 if not optimizations:
                     st.info(
@@ -1164,11 +1414,11 @@ with tab7:
                     )
                 else:
                     # Select optimization
-                    opt_options = {opt["optimization_id"]: opt for opt in optimizations}
+                    opt_options = {str(opt["id"]): opt for opt in optimizations}
                     selected_opt_id = st.selectbox(
                         "Select Optimization Job",
                         options=list(opt_options.keys()),
-                        format_func=lambda x: f"{x[:8]} - {opt_options[x].get('algorithm', 'Unknown')} ({opt_options[x].get('status', 'Unknown')})",
+                        format_func=lambda x: f"{x[:8]} - {opt_options[x].get('strategy_name', 'Unknown')} ({opt_options[x].get('status', 'Unknown')})",
                     )
 
                     if selected_opt_id:
@@ -1218,8 +1468,8 @@ with tab7:
                                     selected_opt_id
                                 )
 
-                                if detailed_data and "results" in detailed_data:
-                                    results = detailed_data["results"]
+                                if detailed_data and "trials_data" in detailed_data:
+                                    results = detailed_data["trials_data"]
 
                                     if results:
                                         import pandas as pd
@@ -1366,13 +1616,13 @@ with tab7:
                     # Convert to DataFrame for display
                     import pandas as pd
 
-                    opt_df = pd.DataFrame(optimizations)
+                    opt_df = pd.DataFrame(optimizations.get("optimizations", []))
 
                     display_cols = [
-                        "optimization_id",
-                        "algorithm",
-                        "optimization_metric",
-                        "result_count",
+                        "id",
+                        "strategy_name",
+                        "objective_metric",
+                        "max_trials",
                         "created_at",
                         "status",
                     ]
@@ -1381,11 +1631,9 @@ with tab7:
                     ]
 
                     if available_cols:
-                        # Format optimization_id to show short version
-                        if "optimization_id" in opt_df.columns:
-                            opt_df["optimization_id"] = opt_df["optimization_id"].str[
-                                :8
-                            ]
+                        # Format id to show as string
+                        if "id" in opt_df.columns:
+                            opt_df["id"] = opt_df["id"].astype(str)
 
                         st.dataframe(
                             opt_df[available_cols],

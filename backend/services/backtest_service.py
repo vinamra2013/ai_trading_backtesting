@@ -70,7 +70,7 @@ class BacktestService:
         self,
         strategy: str,
         symbols: List[str],
-        parameters: Dict[str, Any],
+        parameters: Optional[Dict[str, Any]],
         timeframe: str = "1d",
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
@@ -117,7 +117,7 @@ class BacktestService:
                 session=session,
                 strategy_name=strategy,  # Store original name for API queries
                 symbols=symbols,
-                parameters=parameters,
+                parameters=parameters or {},
                 timeframe=timeframe,
                 status="running",
                 started_at=datetime.now(),
@@ -134,7 +134,7 @@ class BacktestService:
                     strategy_path=validated_strategy,  # Use validated full path
                     start_date=start_date or "2020-01-01",
                     end_date=end_date or "2024-12-31",
-                    strategy_params=parameters,
+                    strategy_params=parameters or {},
                     mlflow_config={
                         "enabled": True,
                         "project": "api_backtests",
@@ -357,6 +357,34 @@ class BacktestService:
             if status in ["completed", "failed"]:
                 setattr(backtest, "completed_at", datetime.now())
 
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+
+    def delete_backtest(self, backtest_id: int) -> bool:
+        """
+        Delete a backtest by ID
+
+        Args:
+            backtest_id: The backtest ID to delete
+
+        Returns:
+            True if deletion was successful
+        """
+        session = self.db_manager.get_session()
+        try:
+            backtest = (
+                session.query(Backtest).filter(Backtest.id == backtest_id).first()
+            )
+
+            if not backtest:
+                return False
+
+            session.delete(backtest)
             session.commit()
             return True
         except Exception as e:

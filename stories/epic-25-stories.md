@@ -425,7 +425,10 @@ This epic aims to **unify orchestration, persistence, and visualization** throug
 - ✅ Complete API-first architecture migration from file-based loaders
 - ✅ Centralized API client (`monitoring/utils/api_client.py`) with retry logic
 - ✅ Enhanced Streamlit dashboard with 10 comprehensive tabs
-- ✅ Backtests tab: List view, detail view, and job submission with real-time polling
+- ✅ Backtests tab: List view, detail view, job submission, and deletion functionality with real-time polling
+- ✅ Backtest deletion: Select individual/all backtests with confirmation dialog and safe deletion
+- ✅ Backtest paging: 10 items per page with navigation controls for large datasets
+- ✅ Compact UI: Thin row dividers and optimized spacing for better readability
 - ✅ Optimization tab: Complete workflow (Run, Results, History) with parameter configuration
 - ✅ Analytics tab: Portfolio statistics and strategy rankings visualization
 - ✅ Job submission forms with validation and error handling

@@ -37,10 +37,10 @@ class APIClient:
             backend_url_env = os.environ.get("FASTAPI_BACKEND_URL")
 
             if backend_url_env and backend_url_env.strip():
-                # Explicit URL set in .env or environment
+                # Explicit URL set in .env or environment (highest priority)
                 self.base_url = backend_url_env.rstrip("/")
             elif os.path.exists("/.dockerenv"):
-                # Inside Docker container
+                # Inside Docker container - use service name for container networking
                 self.base_url = "http://fastapi-backend:8230"
             else:
                 # Local development
@@ -85,6 +85,10 @@ class APIClient:
                 elif method.upper() == "POST":
                     response = self.session.post(
                         url, json=data, params=params, timeout=self.timeout
+                    )
+                elif method.upper() == "DELETE":
+                    response = self.session.delete(
+                        url, params=params, timeout=self.timeout
                     )
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
@@ -155,6 +159,10 @@ class APIClient:
     def get_backtest_status(self, job_id: str) -> Dict[str, Any]:
         """Get status of a backtest job"""
         return self._make_request("GET", f"/api/backtests/status/{job_id}")
+
+    def delete_backtest(self, backtest_id: int) -> Dict[str, Any]:
+        """Delete a backtest by ID"""
+        return self._make_request("DELETE", f"/api/backtests/{backtest_id}")
 
     # Optimization endpoints
     def run_optimization(

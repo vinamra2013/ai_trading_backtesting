@@ -125,3 +125,26 @@ async def get_backtest_status(job_id: str):
         raise HTTPException(
             status_code=500, detail=f"Failed to get backtest status: {str(e)}"
         )
+
+
+@router.delete("/{backtest_id}")
+async def delete_backtest(backtest_id: int):
+    """
+    Delete a backtest by ID
+
+    Permanently removes a backtest record from the database.
+    """
+    try:
+        service = get_backtest_service()
+        success = service.delete_backtest(backtest_id)
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Backtest not found")
+
+        return {"message": f"Backtest {backtest_id} deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete backtest: {str(e)}"
+        )
