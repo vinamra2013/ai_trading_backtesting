@@ -69,6 +69,16 @@ from backend.routers.backtests import router as backtest_router
 
 app.include_router(backtest_router, prefix="/api", tags=["backtests"])
 
+# Import and include MLflow router
+from backend.routers.mlflow import router as mlflow_router
+
+app.include_router(mlflow_router, prefix="/api", tags=["mlflow"])
+
+# Import and include optimization router
+from backend.routers.optimization import router as optimization_router
+
+app.include_router(optimization_router, prefix="/api", tags=["optimization"])
+
 
 @app.get("/")
 async def root():
