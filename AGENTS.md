@@ -4,6 +4,14 @@
 **CRITICAL**: Always activate venv: `source venv/bin/activate.fish`
 - Install dependencies: `source venv/bin/activate.fish && pip install -r requirements.txt`
 
+## Epic 25: FastAPI Backend Integration (COMPLETED)
+- **Backend API**: FastAPI service running on http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+- **Streamlit Dashboard**: Now API-first with real-time backend integration
+- **Analytics Endpoint**: GET /api/analytics/portfolio for portfolio rankings
+- **Job Submission**: Submit backtests and optimizations via API
+- **Real-time Status**: Polling for job status updates
+
 ## Docker Operations
 - Start platform: `./scripts/start.sh`
 - Stop platform: `./scripts/stop.sh`
@@ -42,8 +50,10 @@
 - MLflow logging: Add `--mlflow` flag to backtest commands
 
 ## Monitoring
-- Dashboard: http://localhost:8501
+- Dashboard: http://localhost:8501 (now API-integrated)
 - MLflow UI: http://localhost:5000 (after starting platform)
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
 
 ## Code Style Guidelines
 **Python 3.12+**, strict type hints mandatory. Follow PEP 8. Imports alphabetical: stdlib → third-party → local. Classes PascalCase, functions snake_case, constants UPPER_SNAKE_CASE. Mandatory type hints. File headers with Epic references. Inherit from BaseStrategy for trading strategies. Never commit .env files.

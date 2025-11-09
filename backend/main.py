@@ -79,6 +79,11 @@ from backend.routers.optimization import router as optimization_router
 
 app.include_router(optimization_router, prefix="/api", tags=["optimization"])
 
+# Import and include analytics router
+from backend.routers.analytics import router as analytics_router
+
+app.include_router(analytics_router, prefix="/api", tags=["analytics"])
+
 
 @app.get("/")
 async def root():

@@ -172,3 +172,14 @@ db_manager = DatabaseManager()
 def get_db_manager() -> DatabaseManager:
     """Get the global database manager instance"""
     return db_manager
+
+
+@contextmanager
+def get_db_session():
+    """Context manager for database sessions"""
+    db = get_db_manager()
+    session = db.get_session()
+    try:
+        yield session
+    finally:
+        session.close()

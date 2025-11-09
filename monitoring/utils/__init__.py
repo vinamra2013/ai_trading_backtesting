@@ -2,7 +2,6 @@
 Utility modules for Streamlit monitoring dashboard
 """
 
-from .backtest_loader import BacktestLoader
-from .optimization_loader import OptimizationLoader
+from .api_client import get_api_client, APIClient
 
-__all__ = ['BacktestLoader', 'OptimizationLoader']
+__all__ = ["get_api_client", "APIClient"]
