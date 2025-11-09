@@ -725,9 +725,39 @@ docker compose logs ib-gateway  # IB Gateway logs
 
 ### Overview
 
-**URL**: http://localhost:8501
+**URL**: http://localhost:8501 (or your-host:8501 for external access)
 
-**9 Interactive Tabs**:
+**10 Interactive Tabs** (Updated with Epic 25):
+
+### External Access Configuration
+
+When accessing the Streamlit dashboard from outside localhost, configure the backend URL:
+
+**Environment Variable:**
+```bash
+export FASTAPI_BACKEND_URL=http://your-server-ip:8230
+streamlit run monitoring/app.py
+```
+
+**Docker Environment:**
+```yaml
+# In docker-compose.yml, add to monitoring service:
+environment:
+  - FASTAPI_BACKEND_URL=http://your-host-ip:8230
+```
+
+The API client automatically detects the environment:
+- **Docker**: Uses `fastapi-backend:8230` (service name)
+- **Local**: Uses `localhost:8230`
+- **External**: Uses configured URL from `FASTAPI_BACKEND_URL`
+
+**10 Interactive Tabs**:
+
+### Tab 1: 📊 Dashboard
+- Account summary (equity, cash, P&L)
+- Risk metrics (drawdown, Sharpe, volatility)
+- Equity curve visualization
+- Top positions by value
 
 ### Tab 1: 📊 Dashboard
 - Account summary (equity, cash, P&L)
@@ -753,7 +783,25 @@ docker compose logs ib-gateway  # IB Gateway logs
 - Return distribution
 - Risk-adjusted metrics
 
-### Tab 5: 🔬 Backtests
+### Tab 5: 📊 Analytics *(New - Epic 25)*
+- Portfolio strategy rankings
+- Performance metrics dashboard
+- Strategy comparison tools
+- Real-time analytics from FastAPI backend
+
+### Tab 6: 🔬 Backtests *(Enhanced - Epic 25)*
+- Backtest results list
+- Individual backtest details
+- Job submission interface
+- Real-time status monitoring
+
+### Tab 7: ⚙️ Optimization *(New - Epic 25)*
+- Parameter optimization setup
+- Optimization job submission
+- Results visualization
+- Historical optimization tracking
+
+### Tab 8: 🧪 MLflow Experiments
 - Historical backtest results
 - Performance metrics comparison
 - Strategy comparison
@@ -765,7 +813,7 @@ docker compose logs ib-gateway  # IB Gateway logs
 - Optimization progress tracking
 - Result visualization
 
-### Tab 7: 🧪 MLflow (NEW - Epic 17)
+### Tab 8: 🧪 MLflow Experiments
 - **Real-time Metrics**: 4 metric cards
   - Total Experiments
   - Total Runs
@@ -783,18 +831,19 @@ docker compose logs ib-gateway  # IB Gateway logs
   - Risk-Adjusted Returns scatter plot
 - **MLflow UI Link**: Direct access to http://localhost:5000
 
-### Tab 8: 🏥 Health
-- Service status (all 6 Docker containers)
-- IB Gateway connectivity
+### Tab 9: 🏥 Health
+- Service status (all Docker containers)
+- FastAPI backend connectivity
 - Database connections
 - System resources (CPU, memory, disk)
 - Uptime monitoring
 
-### Tab 9: ⚙️ Settings
+### Tab 10: ⚙️ Settings
 - Environment variables viewer
 - Configuration browser
 - Service configuration
 - Credential status (masked)
+- API client configuration
 
 ---
 
