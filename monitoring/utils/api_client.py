@@ -13,15 +13,30 @@ logger = logging.getLogger(__name__)
 class APIClient:
     """Client for communicating with FastAPI backend"""
 
-    def __init__(self, base_url: str = "http://localhost:8230", timeout: int = 30):
+    def __init__(self, base_url: Optional[str] = None, timeout: int = 30):
         """
         Initialize API client
 
         Args:
-            base_url: Base URL of the FastAPI backend
+            base_url: Base URL of the FastAPI backend (auto-detects if None)
             timeout: Request timeout in seconds
         """
-        self.base_url = base_url.rstrip("/")
+        if base_url is None:
+            # Auto-detect based on environment
+            import os
+
+            # Check if running in Docker (service name available)
+            if os.path.exists("/.dockerenv") or os.environ.get("FASTAPI_BACKEND_URL"):
+                # Inside Docker or explicit URL set
+                backend_url = os.environ.get(
+                    "FASTAPI_BACKEND_URL", "http://fastapi-backend:8230"
+                )
+                self.base_url = backend_url.rstrip("/")
+            else:
+                # Local development
+                self.base_url = "http://localhost:8230"
+        else:
+            self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.session = requests.Session()
 

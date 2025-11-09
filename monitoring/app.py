@@ -21,6 +21,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import time
 import json
+import os
 from typing import Dict, Any
 
 # Page configuration
@@ -36,14 +37,26 @@ st.set_page_config(
 # Using time.sleep for periodic refresh instead
 
 
+# API Client configuration
+def get_configured_api_client():
+    """Get API client with proper configuration for current environment"""
+    from utils.api_client import APIClient
+
+    # Check for explicit backend URL
+    backend_url = os.environ.get("FASTAPI_BACKEND_URL")
+    if backend_url:
+        return APIClient(base_url=backend_url)
+
+    # Auto-detect based on environment
+    return APIClient()
+
+
 # Job polling functionality
 @st.cache_data(ttl=5)
 def poll_job_status(job_id: str, job_type: str = "backtest") -> Dict[str, Any]:
     """Poll job status with caching"""
     try:
-        from utils.api_client import get_api_client
-
-        api_client = get_api_client()
+        api_client = get_configured_api_client()
 
         if job_type == "backtest":
             return api_client.get_backtest_status(job_id)
@@ -59,9 +72,7 @@ def poll_job_status(job_id: str, job_type: str = "backtest") -> Dict[str, Any]:
 def check_backend_availability() -> bool:
     """Check if the FastAPI backend is available"""
     try:
-        from utils.api_client import get_api_client
-
-        api_client = get_api_client()
+        api_client = get_configured_api_client()
         return api_client.is_available()
     except Exception:
         return False
@@ -645,11 +656,9 @@ with tab5:
         st.info("Analytics require the FastAPI backend to be running.")
         st.stop()
 
-    # Import API client
+    # Get configured API client
     try:
-        from utils.api_client import get_api_client
-
-        api_client = get_api_client()
+        api_client = get_configured_api_client()
 
         # Get portfolio analytics
         analytics_data = api_client.get_portfolio_analytics()
@@ -757,11 +766,9 @@ with tab6:
         st.info("Backtest functionality requires the FastAPI backend to be running.")
         st.stop()
 
-    # Import API client
+    # Get configured API client
     try:
-        from utils.api_client import get_api_client
-
-        api_client = get_api_client()
+        api_client = get_configured_api_client()
 
         # Get list of backtests
         backtests_response = api_client.list_backtests()
@@ -975,11 +982,9 @@ with tab7:
         )
         st.stop()
 
-    # Import API client
+    # Get configured API client
     try:
-        from utils.api_client import get_api_client
-
-        api_client = get_api_client()
+        api_client = get_configured_api_client()
 
         # Create tabs for optimization workflow
         opt_tab1, opt_tab2, opt_tab3 = st.tabs(
