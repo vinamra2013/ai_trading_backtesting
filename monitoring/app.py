@@ -342,6 +342,13 @@ def get_risk_metrics():
 st.title("🤖 AI Trading Backtesting Platform")
 st.markdown("---")
 
+# Simple test to verify Streamlit works
+st.write("🚀 Streamlit is working!")
+if st.button("Test Button"):
+    st.success("Button works!")
+
+st.markdown("---")
+
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
@@ -417,18 +424,15 @@ with col4:
 st.markdown("---")
 
 # Tabs for different views
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
     [
         "📊 Dashboard",
-        "💼 Live Trading",
-        "📜 Trade Log",
+        "📁 Data Files",
         "📈 Performance",
         "📊 Analytics",
         "🔬 Backtests",
         "⚙️ Optimization",
         "🧪 MLflow",
-        "🏥 Health",
-        "⚙️ Settings",
     ]
 )
 
@@ -495,67 +499,453 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
 with tab2:
-    st.header("💼 Live Trading")
+    st.header("📁 Data Files Management")
 
-    # Open Positions
-    st.subheader("Open Positions")
-    positions_data = get_positions_data()
-    if positions_data:
-        positions_df = pd.DataFrame(positions_data)
-        st.dataframe(positions_df, use_container_width=True)
-    else:
-        st.info("No open positions")
+    # Check backend availability
+    if not check_backend_availability():
+        st.error("Backend not available")
+        st.stop()
+
+    # Get configured API client
+    try:
+        api_client = get_configured_api_client()
+        st.write("✅ API client ready")
+    except Exception as e:
+        st.error(f"Failed to initialize API client: {e}")
 
     st.markdown("---")
 
-    # Recent Orders
-    st.subheader("Recent Orders")
-    orders_data = get_orders_data(20)
-    if orders_data:
-        orders_df = pd.DataFrame(orders_data)
-        st.dataframe(orders_df, use_container_width=True)
-    else:
-        st.info("No orders yet")
+    # Create subtabs for different data operations
+    data_tab1, data_tab2, data_tab3 = st.tabs(
+        ["📋 File Browser", "📤 Process Data", "📊 Statistics"]
+    )
 
-with tab3:
-    st.header("Trade Log")
+    with data_tab1:
+        st.subheader("Data Files Browser")
 
-    # Get all filled orders for trade journal
-    all_orders = get_orders_data(100)
-    filled_orders = [
-        order for order in all_orders if "FILLED" in order.get("Status", "")
-    ]
-
-    if filled_orders:
-        st.subheader(f"Completed Trades ({len(filled_orders)})")
-
-        # Convert to DataFrame for analysis
-        trades_df = pd.DataFrame(filled_orders)
-
-        # Calculate P&L for each trade (simplified)
-        trades_df["P&L"] = 0.0  # Would calculate from entry/exit pairs
-
-        # Display trades
-        st.dataframe(trades_df, use_container_width=True)
-
-        # Export functionality
-        col1, col2 = st.columns(2)
+        # Refresh button
+        col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
-            if st.button("📥 Export to CSV"):
-                csv = trades_df.to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=f"trade_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv",
-                )
+            if st.button("🔄 Refresh Files"):
+                st.rerun()
 
         with col2:
-            if st.button("📥 Export to Excel"):
-                # Would implement Excel export
-                st.info("Excel export coming soon!")
-    else:
-        st.info("No completed trades yet. Deploy a strategy to see trades here.")
+            data_dir = st.selectbox(
+                "Data Directory",
+                ["data/csv", "data/csv/1m", "data/csv/5m", "data/csv/1d"],
+                index=0,
+            )
+
+        # Direct file scanning (primary method)
+        try:
+            from scripts.data_file_scanner import DataFileScanner
+
+            with st.spinner("Scanning data files..."):
+                scanner = DataFileScanner(data_dir)
+                files_data = scanner.scan_data_files()
+
+            if files_data:
+                total_files = len(files_data)
+                total_size = sum(f.get("file_size_mb", 0) for f in files_data)
+
+                # Summary metrics
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    st.metric("Total Files", total_files)
+                with col2:
+                    st.metric("Total Size", f"{total_size:.1f} MB")
+                with col3:
+                    st.metric("Data Directory", data_dir)
+                with col4:
+                    st.metric("Status", "Loaded")
+
+                # Group files by symbol and timeframe
+                from collections import defaultdict
+
+                # Group by symbol first, then by timeframe
+                symbol_groups = defaultdict(lambda: defaultdict(list))
+
+                # Calculate symbol stats
+                symbol_stats = {}
+                for file_info in files_data:
+                    symbol = file_info.get("symbol", "Unknown")
+                    timeframe = file_info.get("timeframe", "Unknown")
+                    symbol_groups[symbol][timeframe].append(file_info)
+
+                    # Initialize or update symbol stats
+                    if symbol not in symbol_stats:
+                        symbol_stats[symbol] = {
+                            "total_files": 0,
+                            "total_size": 0.0,
+                            "timeframes": set(),
+                        }
+
+                    symbol_stats[symbol]["total_files"] += 1
+                    symbol_stats[symbol]["total_size"] += file_info.get(
+                        "file_size_mb", 0.0
+                    )
+                    symbol_stats[symbol]["timeframes"].add(timeframe)
+
+                # Display hierarchical view
+                st.subheader("📊 Data Files by Symbol")
+
+                for symbol in sorted(symbol_groups.keys()):
+                    symbol_files = symbol_groups[symbol]
+                    symbol_info = symbol_stats[symbol]
+
+                    # Symbol header with summary
+                    with st.expander(
+                        f"📈 {symbol} - {symbol_info['total_files']} files, {symbol_info['total_size']:.1f} MB",
+                        expanded=False,
+                    ):
+                        # Symbol overview
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Files", symbol_info["total_files"])
+                        with col2:
+                            st.metric(
+                                "Total Size", f"{symbol_info['total_size']:.1f} MB"
+                            )
+                        with col3:
+                            timeframe_count = len(symbol_info["timeframes"])
+                            st.metric("Timeframes", timeframe_count)
+                        with col4:
+                            # Calculate average quality
+                            symbol_qualities = []
+                            for tf_files in symbol_files.values():
+                                for f in tf_files:
+                                    if f.get("quality_score"):
+                                        symbol_qualities.append(f["quality_score"])
+                            avg_quality = (
+                                sum(symbol_qualities) / len(symbol_qualities)
+                                if symbol_qualities
+                                else 0
+                            )
+                            quality_label = (
+                                "Excellent"
+                                if avg_quality >= 90
+                                else "Good"
+                                if avg_quality >= 75
+                                else "Fair"
+                                if avg_quality >= 60
+                                else "Poor"
+                            )
+                            st.metric(
+                                "Avg Quality", f"{quality_label} ({avg_quality:.0f})"
+                            )
+
+                        # Timeframe breakdown
+                        st.markdown("### By Timeframe")
+                        for timeframe in sorted(symbol_files.keys()):
+                            tf_files = symbol_files[timeframe]
+                            tf_size = sum(f.get("file_size_mb", 0) for f in tf_files)
+                            tf_rows = sum(f.get("row_count", 0) for f in tf_files)
+
+                            with st.expander(
+                                f"⏰ {timeframe} - {len(tf_files)} files, {tf_size:.1f} MB, {tf_rows:,} rows",
+                                expanded=False,
+                            ):
+                                # Timeframe files table
+                                tf_df = pd.DataFrame(tf_files)
+                                # Use relative_path as filename display
+                                display_df = tf_df.copy()
+                                display_df["filename"] = display_df["relative_path"]
+                                st.dataframe(
+                                    display_df[
+                                        [
+                                            "filename",
+                                            "file_size_mb",
+                                            "last_modified",
+                                            "quality_status",
+                                            "row_count",
+                                            "start_date",
+                                            "end_date",
+                                        ]
+                                    ],
+                                    use_container_width=True,
+                                    column_config={
+                                        "filename": st.column_config.TextColumn(
+                                            "Filename", width="large"
+                                        ),
+                                        "file_size_mb": st.column_config.NumberColumn(
+                                            "Size (MB)", format="%.2f"
+                                        ),
+                                        "last_modified": st.column_config.DatetimeColumn(
+                                            "Modified"
+                                        ),
+                                        "quality_status": st.column_config.TextColumn(
+                                            "Quality"
+                                        ),
+                                        "row_count": st.column_config.NumberColumn(
+                                            "Rows", format=","
+                                        ),
+                                        "start_date": st.column_config.TextColumn(
+                                            "Start Date"
+                                        ),
+                                        "end_date": st.column_config.TextColumn(
+                                            "End Date"
+                                        ),
+                                    },
+                                    hide_index=True,
+                                )
+
+                                # Quick actions for this timeframe
+                                if len(tf_files) > 0:
+                                    st.markdown("**Quick Actions:**")
+                                    action_col1, action_col2, action_col3 = st.columns(
+                                        3
+                                    )
+                                    with action_col1:
+                                        if st.button(
+                                            f"📊 View Sample ({timeframe})",
+                                            key=f"sample_{symbol}_{timeframe}",
+                                        ):
+                                            # Show sample from first file
+                                            sample_file = tf_files[0]
+                                            try:
+                                                df = pd.read_csv(
+                                                    sample_file["file_path"], nrows=5
+                                                )
+                                                st.dataframe(df)
+                                            except Exception as e:
+                                                st.error(f"Failed to load sample: {e}")
+
+                                    with action_col2:
+                                        if st.button(
+                                            f"📈 Quality Stats ({timeframe})",
+                                            key=f"quality_{symbol}_{timeframe}",
+                                        ):
+                                            # Show quality distribution for this timeframe
+                                            qualities = [
+                                                f.get("quality_status", "Unknown")
+                                                for f in tf_files
+                                            ]
+                                            quality_counts = pd.Series(
+                                                qualities
+                                            ).value_counts()
+                                            st.bar_chart(quality_counts)
+
+                                    with action_col3:
+                                        if st.button(
+                                            f"📅 Date Coverage ({timeframe})",
+                                            key=f"coverage_{symbol}_{timeframe}",
+                                        ):
+                                            # Show date range coverage
+                                            date_ranges = []
+                                            for f in tf_files:
+                                                start = f.get("start_date", "")
+                                                end = f.get("end_date", "")
+                                                if start and end:
+                                                    date_ranges.append(
+                                                        f"{start} to {end}"
+                                                    )
+                                            if date_ranges:
+                                                st.write("Date ranges covered:")
+                                                for dr in date_ranges[
+                                                    :5
+                                                ]:  # Show first 5
+                                                    st.write(f"• {dr}")
+                                                if len(date_ranges) > 5:
+                                                    st.write(
+                                                        f"... and {len(date_ranges) - 5} more ranges"
+                                                    )
+
+                # Navigation guide
+                st.markdown("---")
+                st.info(
+                    "💡 **Smart Navigation:** Files are organized by Symbol → Timeframe. Expand any symbol to see its timeframes, then expand a timeframe to view individual files and access quick actions like sample data viewing and quality analysis."
+                )
+
+            else:
+                st.info("No data files found in the selected directory")
+
+        except Exception as e:
+            st.error(f"Failed to scan data files: {e}")
+            st.info("Make sure the data directory exists and contains CSV files")
+
+    with data_tab2:
+        st.subheader("Process Databento Data")
+
+        # File upload section
+        uploaded_file = st.file_uploader(
+            "Upload Databento ZIP file",
+            type=["zip"],
+            help="Upload a ZIP file containing Databento data for processing",
+        )
+
+        if uploaded_file is not None:
+            st.success(f"File uploaded: {uploaded_file.name}")
+
+            # Process button
+            if st.button("🚀 Process Uploaded File"):
+                try:
+                    with st.spinner("Starting processing job..."):
+                        files = {"file": uploaded_file}
+                        data = {"output_dir": "data/csv/1m"}
+
+                        response = api_client._make_request(
+                            "POST",
+                            "/api/data/process",
+                            files=files,
+                            data=data,
+                        )
+
+                    if response and "job_id" in response:
+                        job_id = response["job_id"]
+                        st.success(f"✅ Processing started! Job ID: {job_id}")
+
+                        # Show job status
+                        with st.expander("Job Status", expanded=True):
+                            status_placeholder = st.empty()
+
+                            # Poll for status
+                            import time
+
+                            for _ in range(30):  # Poll for 30 seconds
+                                try:
+                                    status_response = api_client._make_request(
+                                        "GET", f"/api/data/process/{job_id}"
+                                    )
+                                    if status_response:
+                                        status = status_response.get(
+                                            "status", "unknown"
+                                        )
+                                        message = status_response.get("message", "")
+
+                                        if status == "completed":
+                                            status_placeholder.success(f"✅ {message}")
+                                            st.rerun()
+                                            break
+                                        elif status == "failed":
+                                            status_placeholder.error(f"❌ {message}")
+                                            break
+                                        else:
+                                            status_placeholder.info(f"🔄 {message}")
+
+                                    time.sleep(2)
+
+                                except Exception as e:
+                                    status_placeholder.error(
+                                        f"Error checking status: {e}"
+                                    )
+                                    break
+
+                            if status_placeholder.empty:
+                                st.info(
+                                    "Processing may take longer. Check back later or refresh the page."
+                                )
+                    else:
+                        st.error("Failed to start processing job")
+
+                except Exception as e:
+                    st.error(f"Failed to process file: {e}")
+
+        # Alternative: Process existing zip file
+        st.markdown("---")
+        st.subheader("Process Existing Zip File")
+
+        zip_path = st.text_input(
+            "Zip File Path",
+            placeholder="/path/to/databento/data.zip",
+            help="Path to an existing Databento zip file on the server",
+        )
+
+        if zip_path and st.button("Process Existing File"):
+            try:
+                with st.spinner("Starting processing job..."):
+                    response = api_client._make_request(
+                        "POST",
+                        "/api/data/process",
+                        json={
+                            "zip_file_path": zip_path,
+                            "output_dir": "data/csv/1m",
+                        },
+                    )
+
+                if response and "job_id" in response:
+                    st.success(f"Processing job started: {response['job_id']}")
+                else:
+                    st.error("Failed to start processing job")
+
+            except Exception as e:
+                st.error(f"Failed to process file: {e}")
+
+    with data_tab3:
+        st.subheader("Data Statistics")
+
+        try:
+            # Get statistics
+            stats_response = api_client._make_request("GET", "/api/data/stats")
+
+            if stats_response:
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    st.metric("Total Files", stats_response.get("total_files", 0))
+                with col2:
+                    st.metric(
+                        "Total Size",
+                        f"{stats_response.get('total_size_mb', 0):.1f} MB",
+                    )
+                with col3:
+                    st.metric("Symbols", len(stats_response.get("symbols", [])))
+                with col4:
+                    st.metric("Timeframes", len(stats_response.get("timeframes", [])))
+
+                # Quality distribution
+                st.subheader("Data Quality Distribution")
+                quality_dist = stats_response.get("quality_distribution", {})
+
+                quality_data = {
+                    "Quality": ["Excellent", "Good", "Fair", "Poor"],
+                    "Count": [
+                        quality_dist.get("excellent", 0),
+                        quality_dist.get("good", 0),
+                        quality_dist.get("fair", 0),
+                        quality_dist.get("poor", 0),
+                    ],
+                }
+
+                quality_df = pd.DataFrame(quality_data)
+                st.bar_chart(quality_df.set_index("Quality"))
+
+                # Symbols list
+                st.subheader("Available Symbols")
+                symbols = stats_response.get("symbols", [])
+                if symbols:
+                    st.write(", ".join(sorted(symbols)))
+                else:
+                    st.info("No symbols found")
+
+                # Timeframes list
+                st.subheader("Available Timeframes")
+                timeframes = stats_response.get("timeframes", [])
+                if timeframes:
+                    # Sort timeframes by typical granularity
+                    timeframe_order = {
+                        "1m": 0,
+                        "5m": 1,
+                        "15m": 2,
+                        "30m": 3,
+                        "1h": 4,
+                        "4h": 5,
+                        "1d": 6,
+                        "1w": 7,
+                        "1M": 8,
+                    }
+                    sorted_timeframes = sorted(
+                        timeframes, key=lambda x: timeframe_order.get(x, 99)
+                    )
+                    st.write(", ".join(sorted_timeframes))
+                else:
+                    st.info("No timeframes found")
+
+            else:
+                st.error("Failed to load statistics")
+
+        except Exception as e:
+            st.error(f"Failed to load statistics: {e}")
 
 with tab4:
     st.header("Performance Metrics")
@@ -1651,461 +2041,6 @@ with tab7:
     except Exception as e:
         st.error(f"Failed to connect to backend API: {e}")
         st.info("Please ensure the FastAPI backend is running.")
-
-with tab8:
-    st.header("🧪 MLflow Experiments")
-
-    # Get MLflow client
-    mlflow_client = get_mlflow_client()
-
-    if not mlflow_client:
-        st.error(
-            "MLflow server is not available. Please start the platform with ./scripts/start.sh"
-        )
-        st.stop()
-
-    mlflow = mlflow_client["mlflow"]
-    pm = mlflow_client["project_manager"]
-
-    # Summary metrics at top
-    st.subheader("📊 Research Lab Overview")
-    col1, col2, col3, col4 = st.columns(4)
-
-    try:
-        # Get all experiments
-        experiments = mlflow.search_experiments()
-        total_experiments = len(
-            [e for e in experiments if e.lifecycle_stage == "active"]
-        )
-
-        # Get all runs
-        all_runs = mlflow.search_runs(
-            experiment_ids=[e.experiment_id for e in experiments], max_results=10000
-        )
-        total_runs = len(all_runs)
-
-        # Get recent runs (last 7 days)
-        from datetime import datetime, timedelta
-        import pandas as pd
-
-        week_ago = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7)
-        recent_runs = [
-            r
-            for r in all_runs.itertuples()
-            if pd.notna(r.start_time) and r.start_time > week_ago
-        ]
-
-        # Get failed runs
-        failed_runs = len([r for r in all_runs.itertuples() if r.status != "FINISHED"])
-
-        with col1:
-            st.metric("Total Experiments", total_experiments)
-        with col2:
-            st.metric("Total Runs", total_runs)
-        with col3:
-            st.metric("Recent Runs (7d)", len(recent_runs))
-        with col4:
-            st.metric(
-                "Failed Runs",
-                failed_runs,
-                delta=f"-{failed_runs}" if failed_runs > 0 else "0",
-            )
-    except Exception as e:
-        st.error(f"Error fetching MLflow metrics: {e}")
-
-    st.markdown("---")
-
-    # Project browser
-    st.subheader("🔍 Browse Experiments")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        # Project filter
-        projects = pm.list_projects()
-        selected_project = st.selectbox("Filter by Project", ["All"] + projects)
-
-    with col2:
-        # Asset class filter
-        asset_classes = pm.list_asset_classes()
-        selected_asset_class = st.selectbox(
-            "Filter by Asset Class", ["All"] + asset_classes
-        )
-
-    with col3:
-        # Strategy family filter
-        strategy_families = pm.list_strategy_families()
-        selected_strategy_family = st.selectbox(
-            "Filter by Strategy Family", ["All"] + strategy_families
-        )
-
-    # Query experiments based on filters
-    try:
-        if selected_project != "All":
-            experiments = pm.query_by_project(selected_project)
-        elif selected_asset_class != "All":
-            experiments = pm.query_by_asset_class(selected_asset_class)
-        elif selected_strategy_family != "All":
-            experiments = pm.query_by_strategy_family(selected_strategy_family)
-        else:
-            experiments = mlflow.search_experiments()
-
-        # Display experiments
-        if experiments:
-            st.write(f"**Found {len(experiments)} experiments**")
-
-            # Create experiment list
-            exp_data = []
-            for exp in experiments:
-                # Get best run for this experiment
-                runs = mlflow.search_runs(
-                    experiment_ids=[exp.experiment_id],
-                    max_results=1,
-                    order_by=["metrics.sharpe_ratio DESC"],
-                )
-
-                if len(runs) > 0:
-                    best_run = runs.iloc[0]
-                    exp_data.append(
-                        {
-                            "Experiment": exp.name,
-                            "Runs": mlflow.search_runs(
-                                experiment_ids=[exp.experiment_id]
-                            ).shape[0],
-                            "Best Sharpe": f"{best_run.get('metrics.sharpe_ratio', 0):.2f}"
-                            if "metrics.sharpe_ratio" in best_run
-                            else "N/A",
-                            "Best Return": f"{best_run.get('metrics.total_return', 0):.2%}"
-                            if "metrics.total_return" in best_run
-                            else "N/A",
-                            "Max Drawdown": f"{best_run.get('metrics.max_drawdown', 0):.2%}"
-                            if "metrics.max_drawdown" in best_run
-                            else "N/A",
-                            "Created": exp.creation_time,
-                        }
-                    )
-
-            if exp_data:
-                df = pd.DataFrame(exp_data)
-                st.dataframe(df, use_container_width=True, hide_index=True)
-
-                # Link to MLflow UI
-                st.info(
-                    "🔗 For advanced features, open the [MLflow UI](http://localhost:5000)"
-                )
-            else:
-                st.info("No runs found for these experiments yet.")
-        else:
-            st.info("No experiments found matching your filters.")
-
-    except Exception as e:
-        st.error(f"Error querying experiments: {e}")
-        import traceback
-
-        st.code(traceback.format_exc())
-
-    st.markdown("---")
-
-    # Experiment comparison
-    st.subheader("🔬 Compare Experiments")
-
-    try:
-        # Get all experiments for multi-select
-        all_experiments = mlflow.search_experiments()
-        experiment_options = {
-            exp.name: exp.experiment_id
-            for exp in all_experiments
-            if exp.lifecycle_stage == "active"
-        }
-
-        if experiment_options:
-            # Multi-select experiments
-            selected_experiments = st.multiselect(
-                "Select experiments to compare (2-5 recommended)",
-                options=list(experiment_options.keys()),
-                max_selections=5,
-            )
-
-            if len(selected_experiments) >= 2:
-                st.write(f"**Comparing {len(selected_experiments)} experiments**")
-
-                # Get runs for selected experiments
-                selected_exp_ids = [
-                    experiment_options[exp] for exp in selected_experiments
-                ]
-                comparison_data = []
-
-                for exp_name in selected_experiments:
-                    exp_id = experiment_options[exp_name]
-                    # Get best run for each experiment
-                    runs = mlflow.search_runs(
-                        experiment_ids=[exp_id],
-                        max_results=1,
-                        order_by=["metrics.sharpe_ratio DESC"],
-                    )
-
-                    if len(runs) > 0:
-                        best_run = runs.iloc[0]
-                        comparison_data.append(
-                            {
-                                "Experiment": exp_name,
-                                "Sharpe Ratio": f"{best_run.get('metrics.sharpe_ratio', 0):.2f}"
-                                if "metrics.sharpe_ratio" in best_run
-                                else "N/A",
-                                "Total Return": f"{best_run.get('metrics.total_return', 0):.2%}"
-                                if "metrics.total_return" in best_run
-                                else "N/A",
-                                "Max Drawdown": f"{best_run.get('metrics.max_drawdown', 0):.2%}"
-                                if "metrics.max_drawdown" in best_run
-                                else "N/A",
-                                "Win Rate": f"{best_run.get('metrics.win_rate', 0):.2%}"
-                                if "metrics.win_rate" in best_run
-                                else "N/A",
-                                "Sortino Ratio": f"{best_run.get('metrics.sortino_ratio', 0):.2f}"
-                                if "metrics.sortino_ratio" in best_run
-                                else "N/A",
-                                "Calmar Ratio": f"{best_run.get('metrics.calmar_ratio', 0):.2f}"
-                                if "metrics.calmar_ratio" in best_run
-                                else "N/A",
-                            }
-                        )
-
-                if comparison_data:
-                    df_comparison = pd.DataFrame(comparison_data)
-                    st.dataframe(
-                        df_comparison, use_container_width=True, hide_index=True
-                    )
-
-                    # Performance charts
-                    st.subheader("📊 Performance Comparison")
-
-                    # Create radar chart for multi-dimensional comparison
-                    try:
-                        metrics_for_chart = []
-                        for exp_name in selected_experiments:
-                            exp_id = experiment_options[exp_name]
-                            runs = mlflow.search_runs(
-                                experiment_ids=[exp_id],
-                                max_results=1,
-                                order_by=["metrics.sharpe_ratio DESC"],
-                            )
-
-                            if len(runs) > 0:
-                                best_run = runs.iloc[0]
-                                metrics_for_chart.append(
-                                    {
-                                        "Experiment": exp_name,
-                                        "Sharpe": best_run.get(
-                                            "metrics.sharpe_ratio", 0
-                                        ),
-                                        "Returns": best_run.get(
-                                            "metrics.total_return", 0
-                                        )
-                                        * 100,  # Convert to percentage
-                                        "Win Rate": best_run.get("metrics.win_rate", 0)
-                                        * 100,
-                                        "Sortino": best_run.get(
-                                            "metrics.sortino_ratio", 0
-                                        ),
-                                        "Calmar": best_run.get(
-                                            "metrics.calmar_ratio", 0
-                                        ),
-                                    }
-                                )
-
-                        if metrics_for_chart:
-                            # Bar chart comparison
-                            metrics_df = pd.DataFrame(metrics_for_chart)
-
-                            col1, col2 = st.columns(2)
-
-                            with col1:
-                                fig_sharpe = px.bar(
-                                    metrics_df,
-                                    x="Experiment",
-                                    y="Sharpe",
-                                    title="Sharpe Ratio Comparison",
-                                    labels={"Sharpe": "Sharpe Ratio"},
-                                )
-                                st.plotly_chart(fig_sharpe, use_container_width=True)
-
-                            with col2:
-                                fig_returns = px.bar(
-                                    metrics_df,
-                                    x="Experiment",
-                                    y="Returns",
-                                    title="Total Returns Comparison",
-                                    labels={"Returns": "Total Return (%)"},
-                                )
-                                st.plotly_chart(fig_returns, use_container_width=True)
-
-                            # Risk-adjusted return scatter
-                            fig_scatter = px.scatter(
-                                metrics_df,
-                                x="Sharpe",
-                                y="Returns",
-                                text="Experiment",
-                                title="Risk-Adjusted Returns (Sharpe vs Total Return)",
-                                labels={
-                                    "Sharpe": "Sharpe Ratio",
-                                    "Returns": "Total Return (%)",
-                                },
-                            )
-                            fig_scatter.update_traces(
-                                textposition="top center", marker=dict(size=12)
-                            )
-                            st.plotly_chart(fig_scatter, use_container_width=True)
-
-                    except Exception as chart_error:
-                        st.error(f"Error creating charts: {chart_error}")
-
-            elif len(selected_experiments) == 1:
-                st.info("Select at least 2 experiments to compare.")
-            else:
-                st.info("Select experiments above to compare their performance.")
-        else:
-            st.info("No experiments available for comparison.")
-
-    except Exception as e:
-        st.error(f"Error in experiment comparison: {e}")
-        import traceback
-
-        st.code(traceback.format_exc())
-
-with tab9:
-    st.header("🏥 System Health")
-
-    # Health monitoring section
-    try:
-        from scripts.utils.health_monitor import HealthMonitor, HealthStatus
-
-        health_monitor = HealthMonitor()
-
-        # Run health checks
-        health_checks = health_monitor.run_all_checks()
-        overall_status, overall_message = health_monitor.get_overall_status(
-            health_checks
-        )
-
-        # Overall health status
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            status_color = {
-                HealthStatus.HEALTHY: "green",
-                HealthStatus.WARNING: "orange",
-                HealthStatus.CRITICAL: "red",
-                HealthStatus.UNKNOWN: "gray",
-            }.get(overall_status, "gray")
-
-            st.markdown(
-                f"""
-            <div style="
-                padding: 1rem;
-                border-radius: 0.5rem;
-                background-color: {status_color};
-                color: white;
-                text-align: center;
-                margin-bottom: 1rem;
-            ">
-                <h3>Overall Status: {overall_status.upper()}</h3>
-                <p>{overall_message}</p>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
-
-        with col2:
-            # Health summary
-            health_summary = health_monitor.get_health_summary()
-            if "error" not in health_summary:
-                st.metric(
-                    "System Uptime", f"{health_summary.get('uptime_percent', 0):.1f}%"
-                )
-                st.metric("Total Checks", health_summary.get("total_checks", 0))
-            else:
-                st.metric("System Uptime", "N/A")
-                st.metric("Total Checks", "N/A")
-
-        with col3:
-            # HTTP status indicator
-            http_status = health_monitor.get_http_status_code(health_checks)
-            if http_status == 200:
-                st.success("🟢 HTTP 200 - Healthy")
-            else:
-                st.error(f"🔴 HTTP {http_status} - Unhealthy")
-
-            st.metric("Last Check", datetime.now().strftime("%H:%M:%S"))
-
-        st.markdown("---")
-
-        # Individual health checks
-        st.subheader("Health Check Details")
-
-        # Group checks by status
-        healthy_checks = [c for c in health_checks if c.status == HealthStatus.HEALTHY]
-        warning_checks = [c for c in health_checks if c.status == HealthStatus.WARNING]
-        critical_checks = [
-            c for c in health_checks if c.status == HealthStatus.CRITICAL
-        ]
-
-        # Display checks by severity
-        if critical_checks:
-            st.error("🚨 Critical Issues")
-            for check in critical_checks:
-                with st.expander(f"❌ {check.name}: {check.message}"):
-                    st.json(check.details)
-
-        if warning_checks:
-            st.warning("⚠️ Warnings")
-            for check in warning_checks:
-                with st.expander(f"⚠️ {check.name}: {check.message}"):
-                    st.json(check.details)
-
-        if healthy_checks:
-            st.success("✅ Healthy Systems")
-            for check in healthy_checks:
-                with st.expander(f"✅ {check.name}: {check.message}"):
-                    st.json(check.details)
-
-        st.markdown("---")
-
-        # Health trends (placeholder for future implementation)
-        st.subheader("Health Trends")
-        st.info("Health trend charts will be available after collecting more data.")
-
-        # Manual refresh button
-        if st.button("🔄 Refresh Health Checks"):
-            st.rerun()
-
-        # Health endpoint URL
-        st.markdown("---")
-        st.subheader("Health Endpoint")
-        st.code("curl http://localhost:8501/health")
-        st.info(
-            "Health endpoint returns JSON with system status and detailed check results."
-        )
-
-    except Exception as e:
-        st.error(f"Health monitoring not available: {e}")
-        st.info(
-            "Health monitoring requires proper system permissions and dependencies."
-        )
-
-with tab10:
-    st.header("Settings")
-
-    st.subheader("Environment Variables")
-    env_vars = {
-        "IB_TRADING_MODE": os.getenv("IB_TRADING_MODE", "not set"),
-        "IB_GATEWAY_HOST": os.getenv("IB_GATEWAY_HOST", "ib-gateway"),
-        "IB_GATEWAY_PORT": os.getenv("IB_GATEWAY_PORT", "4001"),
-        "LOG_LEVEL": os.getenv("LOG_LEVEL", "not set"),
-        "DATABASE_PATH": "/app/data/sqlite/trades.db",
-    }
-
-    for key, value in env_vars.items():
-        st.code(f"{key}: {value}")
 
     st.subheader("Data Directories")
     data_path = "/app/data"

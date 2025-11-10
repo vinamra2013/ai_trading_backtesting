@@ -282,6 +282,59 @@ curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests" | jq '.[] | {
 - **Results Consolidator**: Unified metrics and performance analysis
 - **MLflow Logger**: Experiment tracking and comparison
 
+#### Symbol Discovery & Strategy Ranking API (Epic 26)
+
+**Status**: ✅ Implemented - API-first approach for autonomous Quant Director operations with background processing.
+
+**Symbol Discovery API**:
+```bash
+# Submit discovery scan via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/discovery/scan" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scanner_name": "high_volume",
+    "parameters": {"number_of_rows": 50},
+    "filters": {"liquidity": {"min_avg_volume": 2000000}}
+  }'
+
+# Check discovery job status
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/discovery/status/{job_id}"
+
+# Get discovery results
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/discovery/results/{job_id}"
+```
+
+**Strategy Ranking API**:
+```bash
+# Submit ranking analysis via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/ranking/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_type": "results_dir",
+    "input_source": "results/backtests",
+    "criteria_weights": {
+      "sharpe_ratio": 40.0,
+      "consistency": 20.0,
+      "drawdown_control": 20.0,
+      "trade_frequency": 10.0,
+      "capital_efficiency": 10.0
+    }
+  }'
+
+# Check ranking job status
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/ranking/status/{job_id}"
+
+# Get ranking results
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/ranking/results/{job_id}"
+```
+
+**Features**:
+- **Background Processing**: Redis queue with dedicated discovery and ranking workers
+- **Job Status Tracking**: Real-time monitoring of all background jobs
+- **Database Persistence**: PostgreSQL storage for discovery results and ranking data
+- **API Documentation**: Complete OpenAPI specs at http://localhost:8230/docs
+- **Docker Integration**: Containerized workers (discovery-worker, ranking-worker)
+
 #### Strategy Ranking & Portfolio Optimization (Epic 21)
 
 **Status**: ✅ Implemented - Systematic strategy evaluation and portfolio construction with multi-criteria ranking.
@@ -826,6 +879,14 @@ Critical config files in [config/](config/):
   - Integration with parallel backtest pipeline
   - Processed 328 strategies in <1 minute (exceeds 100+ strategy requirement)
 
+- ✅ **Epic 26**: Quant Director API Integration (100%)
+  - Symbol Discovery API with background processing and Redis queue
+  - Strategy Ranking API with multi-criteria analysis and job tracking
+  - Docker containerization with dedicated discovery-worker and ranking-worker services
+  - PostgreSQL database integration for results persistence
+  - Complete API documentation and OpenAPI specifications
+  - End-to-end workflow testing and validation
+
 **Partially Completed Epics**:
 - 🔄 **Epic 12**: Core Backtesting Engine (87.5%)
   - ✅ Cerebro engine configuration
@@ -1102,10 +1163,11 @@ curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" \
 - Start services: `./scripts/start.sh`
 - Download data: Request developer to download data (specify symbols, dates, resolution, format)
 - Download 1-min data: Request developer to download 1-minute data (specify symbols, date range)
-- Symbol discovery: `python scripts/symbol_discovery.py --scanner high_volume --output csv`
+- Symbol discovery (API): `curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/discovery/scan" -H "Content-Type: application/json" -d '{"scanner_name": "high_volume", "parameters": {"number_of_rows": 50}}'`
+- Strategy ranking (API): `curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/ranking/analyze" -H "Content-Type: application/json" -d '{"input_type": "results_dir", "input_source": "results/backtests"}'`
 - Run backtest (Daily): `curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" -H "Content-Type: application/json" -d '{"strategy": "sma_crossover", "symbols": ["SPY"], "start_date": "2020-01-01", "end_date": "2024-12-31"}'`
 - Run backtest (1-min): `curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/backtests/run" -H "Content-Type: application/json" -d '{"strategy": "sma_crossover", "symbols": ["SPY"], "start_date": "2025-10-07", "end_date": "2025-10-14", "resolution": "1m"}'`
-- Strategy ranking: `curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.strategy_rankings'`
+- Strategy ranking (legacy): `curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.strategy_rankings'`
 - Portfolio optimization: `curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.portfolio_statistics'`
 - Live trading: `./scripts/start_live_trading.sh`
 - Emergency stop: `./scripts/emergency_stop.sh`

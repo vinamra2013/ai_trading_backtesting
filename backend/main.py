@@ -94,6 +94,11 @@ from backend.routers.ranking import router as ranking_router
 
 app.include_router(ranking_router, prefix="/api/ranking", tags=["ranking"])
 
+# Import and include data router
+from backend.routers.data import router as data_router
+
+app.include_router(data_router, tags=["data"])
+
 
 @app.get("/")
 async def root():

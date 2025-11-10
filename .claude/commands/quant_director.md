@@ -335,25 +335,34 @@ For high-frequency strategies:
 
 #### Phase 1: Symbol Discovery
 
-**Weekly Discovery Scan**:
+**Weekly Discovery Scan (API-based)**:
 ```bash
-# High-volume liquidity scan
-docker exec -e PYTHONPATH=/app backtrader-engine \
-python scripts/symbol_discovery.py \
-  --scanner high_volume \
-  --min-volume 2000000 \
-  --atr-threshold 0.5 \
-  --output csv
+# High-volume liquidity scan via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/discovery/scan" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scanner_name": "high_volume",
+    "parameters": {"number_of_rows": 50},
+    "filters": {"liquidity": {"min_avg_volume": 2000000}}
+  }'
 
-# Volatility leaders scan
-docker exec -e PYTHONPATH=/app backtrader-engine \
-python scripts/symbol_discovery.py \
-  --scanner volatility_leaders \
-  --atr-threshold 1.0 \
-  --output csv
+# Volatility leaders scan via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/discovery/scan" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scanner_name": "volatility_leaders",
+    "parameters": {"number_of_rows": 50},
+    "filters": {"volatility": {"min_atr": 1.0}}
+  }'
 
-# View latest discovered symbols
-cat data/discovered_symbols/high_volume_*.csv | tail -50
+# Check discovery job status
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/discovery/status/{job_id}"
+
+# Get discovery results
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/discovery/results/{job_id}"
+
+# View all discovery jobs
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/discovery/jobs"
 ```
 
 #### Phase 2: Strategy Backtesting
@@ -412,20 +421,41 @@ curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | j
 
 #### Phase 3: Strategy Ranking
 
-**Rank All Backtests** (via API):
+**Rank All Backtests (API-based)**:
 ```bash
-# Get ranked strategies with performance metrics
+# Submit strategy ranking analysis via API
+curl -X POST "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/ranking/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_type": "results_dir",
+    "input_source": "results/backtests",
+    "criteria_weights": {
+      "sharpe_ratio": 40.0,
+      "consistency": 20.0,
+      "drawdown_control": 20.0,
+      "trade_frequency": 10.0,
+      "capital_efficiency": 10.0
+    }
+  }'
+
+# Check ranking job status
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/ranking/status/{job_id}"
+
+# Get ranking results
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/ranking/results/{job_id}"
+
+# View all ranking jobs
+curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/ranking/jobs"
+```
+
+**Legacy Analytics Endpoint** (still available):
+```bash
+# Get ranked strategies with performance metrics (legacy)
 curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | jq '.strategy_rankings'
 
 # Filter by Sharpe ratio > 1.0
 curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio" | \
   jq '.strategy_rankings[] | select(.sharpe_ratio > 1.0)'
-```
-
-**Advanced Filtering**:
-```bash
-# Get strategies with Sharpe > 1.0 and max drawdown < 15%
-curl "${FASTAPI_BACKEND_URL:-http://localhost:8230}/api/analytics/portfolio?min_sharpe=1.0&max_drawdown=0.15"
 ```
 
 #### Phase 4: Portfolio Construction

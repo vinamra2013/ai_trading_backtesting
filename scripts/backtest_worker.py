@@ -128,6 +128,20 @@ class BacktestWorker:
         """Parse job data from Redis queue"""
         try:
             data = json.loads(job_data)
+
+            # Check if this is a unified job with job_type
+            if "job_type" in data:
+                job_type = data["job_type"]
+                if job_type == "backtest":
+                    # Extract backtest-specific fields
+                    return BacktestJob(**data)
+                else:
+                    # This shouldn't happen in backtest queue, but handle gracefully
+                    raise ValueError(
+                        f"Unsupported job type in backtest queue: {job_type}"
+                    )
+
+            # Legacy backtest job format
             return BacktestJob(**data)
         except Exception as e:
             raise ValueError(f"Invalid job data: {e}")
