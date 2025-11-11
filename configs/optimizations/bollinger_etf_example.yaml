@@ -1,0 +1,45 @@
+# Bollinger Band Mean Reversion - Euler Search Optimization
+# Example using Euler Search for faster convergence
+
+strategy:
+  name: "BollingerBand_ETF"
+  lean_project_path: "BollingerBand_MeanReversion_ETFs"
+  description: "Bollinger Band mean reversion with dynamic position sizing"
+  category: "mean_reversion"
+  asset_class: "etf"
+
+optimization:
+  type: "Euler Search"  # Faster than Grid Search
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"
+
+  constraints:
+    - "Drawdown < 0.20"
+    - "Total Trades > 50"
+
+  parameters:
+    bb_period:
+      start: 15
+      end: 25
+      step: 5
+      # Generates: 15, 20, 25
+
+    bb_std_dev:
+      start: 1
+      end: 3
+      step: 1
+      # Generates: 1, 2, 3
+
+    profit_target_pct:
+      start: 0.015
+      end: 0.030
+      step: 0.005
+      # Generates: 0.015, 0.020, 0.025, 0.030
+
+success_criteria:
+  min_trades: 50  # Lower for fee-sensitive strategies
+  min_win_rate: 0.45
+  min_sharpe: 0.8
+  max_drawdown: 0.20
+  min_avg_win: 0.015
+  max_fee_pct: 0.25

@@ -1,0 +1,22 @@
+# Batch optimization run - Test multiple strategies overnight
+# Usage: python scripts/optimize_runner.py --batch configs/batches/mean_reversion_batch.yaml
+
+batch_name: "Mean Reversion Strategies - Week 1"
+description: "Comprehensive test of all mean reversion approaches"
+
+# List of optimization configs to run sequentially
+optimizations:
+  - configs/optimizations/rsi_etf_example.yaml
+  - configs/optimizations/bollinger_etf_example.yaml
+  # Add more configs here
+
+# Batch-level settings
+settings:
+  continue_on_error: true  # Continue if one optimization fails
+  parallel: false  # Run sequentially (true = parallel, requires resources)
+  max_concurrent: 1  # If parallel=true, max simultaneous optimizations
+
+# Notification settings (optional)
+notifications:
+  on_complete: true  # Print summary when batch completes
+  on_error: true  # Print errors immediately

@@ -1,0 +1,51 @@
+# RSI Mean Reversion ETF - Grid Search Optimization
+# Example configuration for testing RSI strategy with multiple parameter combinations
+
+strategy:
+  name: "RSI_MeanReversion_ETF"
+  lean_project_path: "RSI_MeanReversion_ETF"  # Path within lean_projects/
+  description: "RSI-based mean reversion on liquid ETFs"
+  category: "mean_reversion"
+  asset_class: "etf"
+
+optimization:
+  type: "Grid Search"  # Grid Search or Euler Search
+  target_metric: "Sharpe Ratio"  # Sharpe Ratio, Total Return, Calmar Ratio
+  target_direction: "max"  # max or min
+
+  # Optional constraints (lean optimize --constraint format)
+  constraints:
+    - "Drawdown < 0.15"  # Max 15% drawdown
+    - "Total Trades > 100"  # Statistical significance
+
+  # Parameters to optimize
+  # Format: parameter_name: {start: X, end: Y, step: Z}
+  parameters:
+    rsi_period:
+      start: 10
+      end: 20
+      step: 2
+      # Generates: 10, 12, 14, 16, 18, 20 (6 values)
+
+    entry_threshold:
+      start: 25
+      end: 35
+      step: 5
+      # Generates: 25, 30, 35 (3 values)
+
+    exit_threshold:
+      start: 50
+      end: 70
+      step: 10
+      # Generates: 50, 60, 70 (3 values)
+
+# Total combinations: 6 × 3 × 3 = 54 backtests
+
+# Success criteria for automatic evaluation
+success_criteria:
+  min_trades: 100
+  min_win_rate: 0.50  # 50%
+  min_sharpe: 1.0
+  max_drawdown: 0.15  # 15%
+  min_avg_win: 0.01  # 1%
+  max_fee_pct: 0.30  # Fees must be < 30% of capital

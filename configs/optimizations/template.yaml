@@ -1,0 +1,42 @@
+# TEMPLATE - Copy this file to create new optimization configs
+# Example: cp configs/optimizations/template.yaml configs/optimizations/my_strategy.yaml
+
+strategy:
+  name: "STRATEGY_NAME"  # Must match PostgreSQL strategies table
+  lean_project_path: "PROJECT_FOLDER_NAME"  # Folder name in lean_projects/
+  description: "Brief description of what this strategy does"
+  category: "mean_reversion"  # mean_reversion, momentum, volatility, futures, hybrid, event_based
+  asset_class: "etf"  # etf, equity, futures, forex, crypto
+
+optimization:
+  type: "Grid Search"  # Grid Search (exhaustive) or Euler Search (faster)
+  target_metric: "Sharpe Ratio"  # Sharpe Ratio, Total Return, Calmar Ratio
+  target_direction: "max"  # max or min
+
+  # Optional constraints (filters results)
+  constraints:
+    - "Drawdown < 0.15"
+    - "Total Trades > 100"
+
+  # Parameters to optimize - add as many as needed
+  parameters:
+    parameter_name_1:
+      start: 10  # Starting value
+      end: 20  # Ending value
+      step: 2  # Increment
+      # This generates: 10, 12, 14, 16, 18, 20
+
+    parameter_name_2:
+      start: 0.01
+      end: 0.05
+      step: 0.01
+      # Generates: 0.01, 0.02, 0.03, 0.04, 0.05
+
+# Success criteria - used by framework to auto-evaluate results
+success_criteria:
+  min_trades: 100  # Minimum trades for statistical significance
+  min_win_rate: 0.50  # 50% minimum win rate
+  min_sharpe: 1.0  # Sharpe ratio target
+  max_drawdown: 0.15  # Maximum acceptable drawdown (15%)
+  min_avg_win: 0.01  # 1% minimum average win
+  max_fee_pct: 0.30  # Fees must be < 30% of capital
