@@ -1,7 +1,9 @@
-# QuantConnect Cloud Backtest Runner
+---
+name: qc-backtest-runner
+description: Automate QuantConnect cloud backtesting workflow with GitHub integration. Push strategies to QuantConnect cloud, execute backtests, wait for completion, and retrieve performance metrics. This skill should be used when running backtests on QuantConnect cloud or testing trading strategies.
+---
 
-**Category**: Trading & Backtesting
-**Purpose**: Automate QuantConnect cloud backtesting workflow with GitHub integration
+# QuantConnect Cloud Backtest Runner
 
 ## Description
 
@@ -58,30 +60,32 @@ This skill automates the complete workflow for running backtests on QuantConnect
 - `--timeout`: Wait timeout in seconds (default: 300)
 - `--no-push`: Skip pushing to QC cloud (use existing code)
 
-## Usage Examples
+## How to Use This Skill
+
+The skill includes a bundled script `scripts/qc_cloud_backtest.py` that automates the entire backtest workflow.
 
 ### Quick Backtest (Start Only)
+Execute the bundled script to start a backtest and open results in browser:
 ```bash
-source venv/bin/activate
-python scripts/qc_cloud_backtest.py --open
+venv/bin/python  .claude/skills/qc-backtest-runner/scripts/qc_cloud_backtest.py --open
 ```
 
 ### Full Workflow (Wait for Results)
+Execute with wait and save flags to retrieve complete results:
 ```bash
-source venv/bin/activate
-python scripts/qc_cloud_backtest.py --wait --save
+venv/bin/python  .claude/skills/qc-backtest-runner/scripts/qc_cloud_backtest.py --wait --save
 ```
 
 ### With Git Commit
+Commit and push changes before running backtest:
 ```bash
-source venv/bin/activate
-python scripts/qc_cloud_backtest.py --commit --wait --save
+venv/bin/python  .claude/skills/qc-backtest-runner/scripts/qc_cloud_backtest.py --commit --wait --save
 ```
 
 ### Custom Project
+Specify a different QuantConnect project:
 ```bash
-source venv/bin/activate
-python scripts/qc_cloud_backtest.py --project "My Custom Strategy" --open
+venv/bin/python .claude/skills/qc-backtest-runner/scripts/qc_cloud_backtest.py --project "My Custom Strategy" --open
 ```
 
 ## Output
@@ -141,31 +145,28 @@ Check status at: https://www.quantconnect.com/terminal
 
 ### Auto-Activation Patterns
 
-Claude Code will automatically suggest this skill when detecting:
-- File changes in `strategies/*.py`
-- Keywords: "backtest", "quantconnect", "test strategy"
-- After strategy modifications
-- User requests validation or performance testing
+Automatically activate this skill when detecting:
+- File changes in `strategies/*.py` or `lean_projects/*/main.py`
+- Keywords: "backtest", "quantconnect", "test strategy", "qc cloud", "lean backtest"
+- Strategy modification followed by validation requests
+- Performance testing requests
 
 ### Workflow Integration
 
 1. **Strategy Development:**
-   ```
-   User: "I updated the RSI strategy, can you test it on QuantConnect?"
-   Claude: [Auto-invokes qc-backtest-runner skill]
-   ```
+   - Detect strategy file modifications
+   - Execute bundled script with appropriate flags
+   - Parse and present performance metrics
 
 2. **Result Analysis:**
-   ```
-   User: "Run backtest and show me the results"
-   Claude: [Invokes with --wait --save, then analyzes metrics]
-   ```
+   - Use `--wait --save` flags to retrieve complete results
+   - Parse JSON output for key metrics
+   - Provide analysis and recommendations
 
 3. **Iterative Testing:**
-   ```
-   User: "Test with different parameters"
-   Claude: [Modifies strategy, commits, runs backtest]
-   ```
+   - Modify strategy parameters
+   - Commit changes if requested
+   - Execute backtest and compare results
 
 ## Success Criteria
 

@@ -46,7 +46,8 @@ GITHUB_REPO = "git@github.com:vinamra2013/QuantConnectAlgoTradingStratigies.git"
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
-STRATEGIES_DIR = BASE_DIR / "strategies"
+LEAN_PROJECTS_DIR = BASE_DIR / "lean_projects"
+LEAN_PROJECT_NAME = "RSIMeanReversion"
 RESULTS_DIR = BASE_DIR / "results" / "qc"
 
 # Ensure results directory exists
@@ -110,7 +111,7 @@ def git_commit_push(message=None):
         return
 
     # Add, commit, push
-    run_command("git add strategies/")
+    run_command(f"git add {LEAN_PROJECTS_DIR}/")
     run_command(f'git commit -m "{message}"')
     run_command("git push")
 
@@ -123,7 +124,12 @@ def lean_cloud_push(project_name):
     print("LEAN: Pushing to QuantConnect cloud")
     print("="*60)
 
-    cmd = f'lean cloud push --project "{project_name}"'
+    if not LEAN_PROJECTS_DIR.exists():
+        print(f"Error: LEAN projects directory not found: {LEAN_PROJECTS_DIR}")
+        sys.exit(1)
+
+    # Change to lean_projects directory for LEAN CLI commands
+    cmd = f'cd "{LEAN_PROJECTS_DIR}" && lean cloud push --project {LEAN_PROJECT_NAME}'
     result = run_command(cmd, capture_output=False)
 
     print("✓ Pushed to QuantConnect cloud")
@@ -135,7 +141,7 @@ def lean_cloud_backtest(project_name, open_browser=False):
     print("LEAN: Running backtest")
     print("="*60)
 
-    cmd = f'lean cloud backtest "{project_name}"'
+    cmd = f'cd "{LEAN_PROJECTS_DIR}" && lean cloud backtest {LEAN_PROJECT_NAME}'
     if open_browser:
         cmd += " --open"
 
@@ -148,7 +154,7 @@ def lean_get_latest_backtest_id(project_name):
     """Get the latest backtest ID for a project"""
     print("\nFetching latest backtest ID...")
 
-    cmd = f'lean cloud backtests "{project_name}"'
+    cmd = f'cd "{LEAN_PROJECTS_DIR}" && lean cloud backtests {LEAN_PROJECT_NAME}'
     result = run_command(cmd)
 
     # Parse output to get first backtest ID

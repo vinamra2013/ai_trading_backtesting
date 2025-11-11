@@ -89,3 +89,4 @@ data/**
 mlflow/artifacts/**
 mlflow/backend/**
 mlflow/mlflow.db
+lean_projects/data/
