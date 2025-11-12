@@ -1,0 +1,154 @@
+# MeanReversion_TrendFilter_ETF - Hybrid Strategy Optimization Configuration
+# Strategy: STR-009
+# Optimization Type: Euler Search (324 combinations)
+# Expected Runtime: ~5-7 hours on QuantConnect Cloud
+#
+# KEY HYPOTHESIS TEST:
+# This configuration enables A/B testing the hypothesis:
+# "Mean reversion works better WITH-TREND than counter-trend"
+#
+# The require_trend parameter allows direct comparison:
+# - require_trend=true: Only enter RSI oversold when price > trend SMA
+# - require_trend=false: Enter all RSI oversold signals (baseline)
+
+strategy:
+  name: "MeanReversion_TrendFilter_ETF"
+  lean_project_path: "MeanReversion_TrendFilter_ETF"
+  category: "hybrid"
+  asset_class: "etf"
+  description: "RSI mean reversion with trend filter - tests 'with-trend' hypothesis"
+
+optimization:
+  type: "Euler Search"  # Tests all 324 parameter combinations systematically
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"  # Maximize risk-adjusted returns
+
+  # Hard constraints - filter out results that don't meet these
+  constraints:
+    - "Drawdown < 0.12"        # Max 12% drawdown (lower than RSI-only due to trend filter)
+    - "Total Trades > 75"      # Minimum 75 trades (fewer than RSI-only due to selectivity)
+    - "Win Rate > 0.50"        # At least 50% win rate (higher expected due to trend context)
+    - "PSR > 0.75"             # Probabilistic Sharpe Ratio > 0.75 for confidence
+
+  # Parameter search space
+  # Total combinations: 3 × 3 × 3 × 2 × 3 × 3 = 324
+  parameters:
+    rsi_period:
+      start: 10
+      end: 20
+      step: 5
+      type: int
+      description: "RSI lookback period - tests 10, 15, 20 for sensitivity analysis"
+
+    rsi_entry:
+      start: 25
+      end: 35
+      step: 5
+      type: int
+      description: "RSI oversold entry threshold - relaxed range for more signals"
+
+    trend_sma:
+      start: 150
+      end: 250
+      step: 50
+      type: int
+      description: "Trend confirmation SMA - tests 150, 200, 250 for trend identification"
+
+    require_trend:
+      values: [true, false]
+      type: bool
+      description: "A/B test: true=with-trend filtering, false=RSI-only baseline"
+
+    profit_target_pct:
+      start: 0.015
+      end: 0.025
+      step: 0.005
+      type: float
+      description: "Profit target percentage - 1.5% to 2.5% range"
+
+    stop_loss_pct:
+      start: 0.01
+      end: 0.02
+      step: 0.005
+      type: float
+      description: "Stop loss percentage - 1% to 2% range for risk control"
+
+# Success criteria for automated evaluation
+success_criteria:
+  min_trades: 75               # Lower than RSI-only due to trend filtering selectivity
+  min_sharpe: 1.3              # Higher target due to improved signal quality
+  max_drawdown: 0.12           # Lower target due to with-trend filtering
+  min_win_rate: 0.50           # Higher target due to trend context
+  max_fee_pct: 0.25            # Fees should be < 25% of total returns
+  min_avg_win: 0.01            # Average winning trade > 1%
+  min_psr: 0.75                # Probabilistic Sharpe Ratio > 0.75
+
+# Backtest configuration
+backtest:
+  start_date: "2020-01-01"
+  end_date: "2024-12-31"
+  initial_capital: 1000
+  data_resolution: "Daily"
+  brokerage: "InteractiveBrokersBrokerage"
+
+# Reporting preferences
+reporting:
+  save_top_n: 10               # Save top 10 parameter sets
+  plot_metrics:
+    - "Sharpe Ratio"
+    - "Total Trades"
+    - "Drawdown"
+    - "Win Rate"
+    - "Net Profit"
+    - "require_trend"          # Critical for A/B testing analysis
+  export_formats:
+    - "csv"
+    - "json"
+  group_by:
+    - "require_trend"          # Group results by trend filter enabled/disabled
+
+# Strategy hypothesis and expected outcomes
+notes: |
+  KEY HYPOTHESIS:
+  "Mean reversion works better WITH-TREND than counter-trend"
+
+  A/B Test Design:
+  - require_trend=true: Only enter RSI oversold when price > trend SMA
+    - Expected: Higher win rate, lower drawdown, better Sharpe
+    - Rationale: Trend context filters out whipsaw counter-trend trades
+
+  - require_trend=false: Enter all RSI oversold signals (baseline)
+    - Expected: More trades, lower win rate, higher drawdown
+    - Rationale: No trend filtering means more false signals
+
+  Expected Results:
+  - With-trend filtering:
+    - 75-100 trades over 5 years (selective)
+    - Sharpe ratio 1.3-1.6 (improved signal quality)
+    - Max drawdown 10-12% (trend context reduces whipsaw)
+    - Win rate 52-58% (better quality signals)
+
+  - Without trend filtering (baseline):
+    - 100-150 trades over 5 years (more signals)
+    - Sharpe ratio 0.8-1.2 (noisier signals)
+    - Max drawdown 12-15% (more whipsaw trades)
+    - Win rate 45-52% (standard mean reversion)
+
+  Validation Criteria:
+  - Compare top 10 results for require_trend=true vs require_trend=false
+  - Expect at least 20% Sharpe improvement with trend filter
+  - Expect at least 5% win rate improvement with trend filter
+  - Expect at least 3% lower drawdown with trend filter
+
+  Optimization Strategy:
+  - Euler Search tests all 324 combinations systematically
+  - Focus on Sharpe Ratio as primary metric (risk-adjusted returns)
+  - Hard constraints filter out underperforming parameter sets
+  - Group by require_trend to enable direct A/B comparison
+  - Top 10 results saved per group for thorough analysis
+
+  Risk Management:
+  - 1% max portfolio risk per trade (non-negotiable)
+  - Position sizing based on stop loss percentage
+  - Daily resolution for fee control with $1K capital
+  - Interactive Brokers fee model for realistic simulation

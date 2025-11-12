@@ -1,0 +1,101 @@
+# RSI_MACD_Combo_ETF Optimization Configuration
+# Strategy: STR-008 (MEDIUM priority - HYBRID)
+# Category: Mean Reversion + Momentum
+# Total combinations: 3×3×3×4×3×3 = 972
+
+strategy:
+  name: "RSI_MACD_Combo_ETF"
+  lean_project_path: "RSI_MACD_Combo_ETF"
+  category: "hybrid"
+  asset_class: "etf"
+  description: "RSI identifies oversold conditions, MACD confirms momentum for entry"
+
+backtest:
+  start_date: "2020-01-01"
+  end_date: "2024-12-31"
+  initial_capital: 1000
+  resolution: "daily"
+  brokerage: "InteractiveBrokers"
+
+optimization:
+  type: "Euler Search"
+  total_combinations: 972
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"
+
+  # Hard constraints
+  constraints:
+    - "Drawdown < 0.15"
+    - "Total Trades >= 50"
+    - "Win Rate >= 0.50"
+    - "Sharpe Ratio >= 1.0"
+
+  # Parameter ranges
+  parameters:
+    rsi_period:
+      description: "RSI lookback period"
+      start: 10
+      end: 20
+      step: 5
+      values: [10, 14, 20]
+      default: 14
+
+    rsi_threshold:
+      description: "RSI oversold entry threshold"
+      start: 25
+      end: 35
+      step: 5
+      values: [25, 30, 35]
+      default: 30
+
+    rsi_exit_threshold:
+      description: "RSI overbought exit threshold"
+      start: 60
+      end: 70
+      step: 5
+      values: [60, 65, 70]
+      default: 60
+
+    macd_fast:
+      description: "MACD fast EMA period"
+      start: 12
+      end: 20
+      step: 4
+      values: [12, 15, 20]
+      default: 12
+
+    macd_slow:
+      description: "MACD slow EMA period"
+      start: 26
+      end: 35
+      step: 5
+      values: [26, 30, 35]
+      default: 26
+
+    macd_signal:
+      description: "MACD signal line period"
+      start: 9
+      end: 15
+      step: 3
+      values: [9, 12, 15]
+      default: 9
+
+# Success criteria
+success_criteria:
+  min_trades: 50
+  min_sharpe: 1.2
+  max_drawdown: 0.15
+  min_win_rate: 0.50
+  max_fee_pct: 0.30
+  min_avg_win: 0.01
+
+# Expected results
+expected_results:
+  total_runs: 972
+  estimated_duration: "8-12 hours"
+  expected_pass_rate: "20-30%"
+  expected_best_sharpe: "1.2-1.5"
+  key_insights:
+    - "Hybrid approach should reduce false signals vs single-indicator strategies"
+    - "MACD confirmation filters weak RSI oversold signals"
+    - "Expect higher win rate but fewer total trades than RSI-only"

@@ -1,0 +1,381 @@
+# Strategy Backlog - Master List for Developer
+# This file contains all strategies to be developed and tested
+# Developer: Build these strategies using get_parameter() for all optimizable values
+# Director: Update priorities and status as testing progresses
+
+# ============================================================================
+# PRIORITY STRATEGIES - Start Here
+# ============================================================================
+
+- id: STR-001
+  name: "RSI_MeanReversion_ETF"
+  status: "IMPLEMENTED"  # ✅ Rebuilt with fresh code, ready for optimization
+  priority: HIGH
+  category: "mean_reversion"
+  asset_class: "etf"
+  lean_project_path: "RSI_MeanReversion_ETF"
+
+  description: "RSI-based mean reversion on liquid ETFs - REVISED for lower trade frequency"
+  hypothesis: "ETFs revert to mean when RSI shows extreme oversold/overbought conditions"
+
+  # Lessons from initial tests
+  lessons_learned:
+    - "Strategy #1: RSI < 25 too restrictive (8 trades only)"
+    - "Need relaxed thresholds for more signals"
+    - "Daily resolution good for fee control"
+    - "✅ IMPLEMENTED: get_parameter() for all optimizable values"
+    - "✅ IMPLEMENTED: Risk management with 1% max risk per trade"
+    - "✅ IMPLEMENTED: Position sizing based on stop loss"
+    - "✅ RUNNING: Euler Search optimization with 486 parameter combinations"
+
+  # Parameters to optimize
+  parameters:
+    rsi_period: [10, 12, 14, 16, 18, 20]
+    entry_threshold: [25, 30, 35]  # More relaxed than initial 25
+    exit_threshold: [50, 60, 70]
+    stop_loss_pct: [0.01, 0.015, 0.02]
+    profit_target_pct: [0.015, 0.02, 0.025]
+
+  expected_metrics:
+    min_trades: 100
+    target_sharpe: 1.0
+    max_drawdown: 0.15
+    target_avg_win: 0.01
+
+  # Implementation progress
+  implementation_notes:
+    - "✅ Strategy code: RSI_MeanReversion_ETF/main.py with get_parameter()"
+    - "✅ Config file: configs/optimizations/rsi_etf_lowfreq.yaml"
+    - "✅ Optimization started: 486 combinations (Euler Search)"
+    - "⏳ Awaiting results: ~4 hours for completion"
+
+- id: STR-002
+  name: "BollingerBand_ETF_LowFreq"
+  status: "IMPLEMENTED"  # ✅ Revised with wider bands & fee controls, ready for optimization
+  priority: HIGH
+  category: "mean_reversion"
+  asset_class: "etf"
+  lean_project_path: "BollingerBand_ETF_LowFreq"
+
+  description: "Bollinger Band mean reversion - REVISED with wider bands for lower frequency"
+  hypothesis: "Lower frequency = lower fees, wider bands filter false signals"
+
+  lessons_learned:
+    - "Strategy #2: 822 trades generated $674 fees (67% of capital!)"
+    - "High frequency kills small accounts"
+    - "Need 50-150 trades/year, not 800+"
+    - "Win rate was only 43%, need better entry quality"
+
+  parameters:
+    bb_period: [15, 20, 25, 30]
+    bb_std_dev: [2, 2.5, 3]  # Wider bands = fewer signals
+    entry_distance_pct: [0.00, 0.01, 0.02]  # How far past band to enter
+    profit_target_pct: [0.015, 0.02, 0.025, 0.03]
+    stop_loss_pct: [0.01, 0.015, 0.02]
+
+  expected_metrics:
+    min_trades: 50  # Lower than RSI, focus on quality
+    target_sharpe: 0.8
+    max_drawdown: 0.20
+    max_fee_pct: 0.25  # Critical: keep fees under 25%
+
+# ============================================================================
+# MOMENTUM STRATEGIES
+# ============================================================================
+
+- id: STR-003
+  name: "SMA_Crossover_ETF"
+  status: "IMPLEMENTED"  # ✅ Classic golden cross with volume confirmation, ready for optimization
+  priority: MEDIUM
+  category: "momentum"
+  asset_class: "etf"
+  lean_project_path: "SMA_Crossover_ETF"
+
+  description: "Classic SMA crossover with volume confirmation"
+  hypothesis: "Golden cross/death cross on ETFs with strong trends"
+
+  parameters:
+    fast_sma: [20, 30, 50]
+    slow_sma: [100, 150, 200]
+    volume_threshold: [1.2, 1.5, 2.0]  # Volume must be X times average
+
+  expected_metrics:
+    min_trades: 20  # Longer-term, fewer trades
+    target_sharpe: 1.2
+    max_drawdown: 0.15
+
+- id: STR-004
+  name: "Breakout_Momentum_Equity"
+  status: "IMPLEMENTED"  # ✅ Price breakout with volume confirmation, ready for optimization
+  priority: MEDIUM
+  category: "momentum"
+  asset_class: "equity"
+  lean_project_path: "Breakout_Momentum_Equity"
+
+  description: "Price breakout above resistance with volume spike"
+
+  parameters:
+    lookback_period: [20, 30, 50]
+    breakout_threshold: [1.01, 1.02, 1.03]  # % above resistance
+    volume_multiplier: [1.5, 2.0, 2.5]
+    holding_period: [3, 5, 10]  # Days to hold
+
+  expected_metrics:
+    min_trades: 50
+    target_sharpe: 1.0
+    max_drawdown: 0.20
+
+# ============================================================================
+# VOLATILITY STRATEGIES
+# ============================================================================
+
+- id: STR-005
+  name: "ATR_Breakout_ETF"
+  status: "IMPLEMENTED"  # ✅ Volatility expansion breakouts with ATR stops, ready for optimization
+  priority: LOW
+  category: "volatility"
+  asset_class: "etf"
+  lean_project_path: "ATR_Breakout_ETF"
+
+  description: "Volatility expansion breakouts using ATR"
+
+  parameters:
+    atr_period: [10, 14, 20]
+    breakout_multiplier: [2.0, 2.5, 3.0]  # Price moves > X * ATR
+    holding_period: [3, 5, 7]
+
+  expected_metrics:
+    min_trades: 30
+    target_sharpe: 0.8
+    max_drawdown: 0.20
+
+- id: STR-006
+  name: "VIX_Market_Timing"
+  status: "IMPLEMENTED"  # ✅ VIX-based market timing with regime detection, ready for optimization
+  priority: MEDIUM
+  category: "volatility"
+  asset_class: "etf"
+  lean_project_path: "VIX_Market_Timing"
+
+  description: "Enter SPY when VIX spikes, exit when normalizes"
+
+  parameters:
+    vix_entry_threshold: [20, 25, 30]
+    vix_exit_threshold: [15, 18, 20]
+    position_size_pct: [0.5, 0.75, 1.0]
+
+  expected_metrics:
+    min_trades: 10
+    target_sharpe: 1.5
+    max_drawdown: 0.15
+
+# ============================================================================
+# FUTURES STRATEGIES (On Hold - Complex)
+# ============================================================================
+
+- id: STR-007
+  name: "MicroFutures_Momentum_MESNQ"
+  status: "ON_HOLD"  # ⏸️ Complex - revisit after equity/ETF strategies working
+  priority: LOW
+  category: "futures"
+  asset_class: "futures"
+  lean_project_path: "MicroFutures_Momentum_MESNQ"
+
+  description: "Momentum trading on Micro E-mini futures"
+
+  notes: "Futures complexity (contract rollovers, margin) caused delays. Return after 2-3 equity strategies working."
+
+  parameters:
+    ema_fast: [8, 12, 20]
+    ema_slow: [21, 34, 50]
+    atr_stop_multiplier: [2.0, 2.5, 3.0]
+
+# ============================================================================
+# HYBRID STRATEGIES
+# ============================================================================
+
+- id: STR-008
+  name: "RSI_MACD_Combo_ETF"
+  status: "IMPLEMENTED"  # ✅ Dual confirmation with RSI + MACD crossover, ready for optimization
+  priority: MEDIUM
+  category: "hybrid"
+  asset_class: "etf"
+  lean_project_path: "RSI_MACD_Combo_ETF"
+
+  description: "Combine RSI (oversold) + MACD (momentum confirmation)"
+  hypothesis: "Double confirmation reduces false signals"
+
+  parameters:
+    rsi_period: [10, 14, 20]
+    rsi_threshold: [25, 30, 35]
+    macd_fast: [12, 15, 20]
+    macd_slow: [26, 30, 35]
+    macd_signal: [9, 12, 15]
+
+  expected_metrics:
+    min_trades: 50
+    target_sharpe: 1.2
+    max_drawdown: 0.15
+
+- id: STR-009
+  name: "MeanReversion_TrendFilter_ETF"
+  status: "IMPLEMENTED"  # ✅ Hypothesis test: RSI with optional trend filter (A/B test design), ready for optimization
+  priority: HIGH
+  category: "hybrid"
+  asset_class: "etf"
+  lean_project_path: "MeanReversion_TrendFilter_ETF"
+
+  description: "RSI mean reversion but only in direction of 200-day SMA trend"
+  hypothesis: "Mean reversion works better with-trend than counter-trend"
+
+  parameters:
+    rsi_period: [10, 14, 20]
+    rsi_entry: [25, 30, 35]
+    trend_sma: [150, 200, 250]
+    require_trend: [true, false]  # Test with/without filter
+
+  expected_metrics:
+    min_trades: 75
+    target_sharpe: 1.3
+    max_drawdown: 0.12
+
+# ============================================================================
+# EVENT-BASED STRATEGIES
+# ============================================================================
+
+- id: STR-010
+  name: "Earnings_Momentum"
+  status: "IMPLEMENTED"  # ✅ Post-earnings momentum with momentum rotation, ready for optimization
+  priority: LOW
+  category: "event"
+  asset_class: "equity"
+  lean_project_path: "Earnings_Momentum"
+
+  description: "Buy stocks with positive earnings surprises"
+
+  parameters:
+    surprise_threshold: [0.05, 0.10, 0.15]  # % above estimates
+    holding_period: [1, 3, 5]  # Days post-earnings
+    position_size_pct: [0.2, 0.33, 0.5]
+
+  expected_metrics:
+    min_trades: 30
+    target_sharpe: 1.0
+    max_drawdown: 0.20
+
+# ============================================================================
+# ADDITIONAL STRATEGIES (Lower Priority)
+# ============================================================================
+
+- id: STR-011
+  name: "Statistical_Pairs_Trading"
+  status: "IMPLEMENTED"  # ✅ QQQ/SPY pairs mean reversion, ready for optimization
+  priority: LOW
+  category: "mean_reversion"
+  asset_class: "etf_pairs"
+
+  description: "Pairs trading on correlated ETFs (XLF/XLE, SPY/QQQ)"
+
+- id: STR-012
+  name: "Relative_Strength_Leaders"
+  status: "IMPLEMENTED"  # ✅ Relative strength momentum rotation across sector ETFs, ready for optimization
+  priority: LOW
+  category: "momentum"
+  asset_class: "equity"
+
+  description: "Buy stocks with highest relative strength vs SPY"
+
+- id: STR-013
+  name: "Gap_Trading_Overnight"
+  status: "IMPLEMENTED"  # ✅ Overnight gap mean reversion with intraday exits, ready for optimization
+  priority: MEDIUM
+  category: "volatility"
+  asset_class: "etf"
+
+  description: "Trade overnight gaps on liquid ETFs"
+
+- id: STR-014
+  name: "Donchian_Breakout_ETF"
+  status: "IMPLEMENTED"  # ✅ Turtle Trading channel breakout, ready for optimization
+  priority: LOW
+  category: "momentum"
+  asset_class: "etf"
+
+  description: "Channel breakout strategy (Turtle Traders style)"
+
+- id: STR-015
+  name: "Quality_Factor_Momentum"
+  status: "IMPLEMENTED"  # ✅ Quality factor momentum rotation monthly, ready for optimization
+  priority: LOW
+  category: "hybrid"
+  asset_class: "equity"
+
+  description: "High-quality stocks (ROE, debt ratio) with momentum"
+
+# ============================================================================
+# DEVELOPMENT GUIDELINES FOR DEVELOPER
+# ============================================================================
+
+# CRITICAL RULES:
+# 1. ALL optimizable values MUST use get_parameter()
+#    ✅ rsi_period = int(self.get_parameter("rsi_period", "14"))
+#    ❌ rsi_period = 14
+#
+# 2. Check LEAN_DEVELOPER_GUIDE.md for exact API signatures BEFORE coding
+#    - Prevents hours of debugging
+#    - All indicators documented with examples
+#
+# 3. Always check data availability before accessing
+#    ✅ if data.bars.contains_key(symbol):
+#    ❌ price = data[symbol].close
+#
+# 4. Use descriptive variable names (avoid conflicts)
+#    ✅ self.rsi_indicator
+#    ❌ self.rsi  # Conflicts with self.rsi() method
+#
+# 5. Daily resolution for $1K capital (control fees)
+#    - Hour/Minute resolution = fee death
+#    - See Strategy #2: 822 trades = $674 fees!
+#
+# 6. Implement proper risk management
+#    - Max 1% risk per trade
+#    - Always use stop losses
+#    - Position sizing based on risk
+
+# WORKFLOW:
+# 1. Pick strategy from backlog (start with priority: HIGH)
+# 2. Create LEAN project: lean project-create "StrategyName" --language python
+# 3. Code strategy following LEAN_DEVELOPER_GUIDE.md patterns
+# 4. Create optimization config: cp configs/optimizations/template.yaml configs/optimizations/strategy_name.yaml
+# 5. Edit config with parameter ranges
+# 6. Run: python scripts/optimize_runner.py --config configs/optimizations/strategy_name.yaml
+# 7. Review results in PostgreSQL
+# 8. Update this backlog with status
+
+# ============================================================================
+# IMPLEMENTATION COMPLETE - ALL 14 STRATEGIES READY FOR OPTIMIZATION
+# ============================================================================
+#
+# ✅ COMPLETED STRATEGIES:
+# Batch 1 (HIGH Priority - Mean Reversion):
+#   - STR-001: RSI_MeanReversion_ETF (486 combinations, Euler Search)
+#   - STR-002: BollingerBand_ETF_LowFreq (432 combinations, Euler Search)
+#   - STR-009: MeanReversion_TrendFilter_ETF (972 combinations, A/B test)
+#
+# Batch 2 (MEDIUM Priority - Momentum):
+#   - STR-003: SMA_Crossover_ETF (243 combinations, Grid Search)
+#   - STR-004: Breakout_Momentum_Equity (1620 combinations, Euler Search)
+#   - STR-006: VIX_Market_Timing (864 combinations)
+#   - STR-008: RSI_MACD_Combo_ETF (432 combinations, Euler Search)
+#   - STR-013: Gap_Trading_Overnight (192 combinations)
+#
+# Batch 3 (LOW Priority - Specialized):
+#   - STR-005: ATR_Breakout_ETF (27 combinations)
+#   - STR-010: Earnings_Momentum (384 combinations)
+#   - STR-011: Statistical_Pairs_Trading (120 combinations)
+#   - STR-012: Relative_Strength_Leaders (72 combinations)
+#   - STR-014: Donchian_Breakout_ETF (36 combinations)
+#   - STR-015: Quality_Factor_Momentum (72 combinations)
+#
+# TOTAL: 14 strategies, 5,444 optimization combinations
+# NEXT: Run optimizations via optimize_runner.py and analyze results in PostgreSQL

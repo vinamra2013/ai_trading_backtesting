@@ -99,7 +99,7 @@ services:
       - sqlite
     restart: unless-stopped
 
-  # PostgreSQL Database (MLflow Backend + Optuna Storage)
+  # PostgreSQL Database (MLflow Backend + Optuna Storage + Trading Framework)
   postgres:
     image: postgres:16-alpine
     container_name: mlflow-postgres
@@ -107,6 +107,8 @@ services:
       POSTGRES_DB: mlflow
       POSTGRES_USER: mlflow
       POSTGRES_PASSWORD: mlflow_secure_password
+    ports:
+      - "5432:5432"  # Expose to host for trading framework scripts
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     networks:
@@ -241,6 +243,39 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # LEAN Optimizer Service
+  lean-optimizer:
+    build:
+      context: .
+      dockerfile: Dockerfile.optimizer
+    container_name: lean-optimizer
+    working_dir: /home/vbhatnagar/code/ai_trading_backtesting
+    volumes:
+      # Mount at absolute host paths for Docker-in-Docker compatibility
+      - /home/vbhatnagar/code/ai_trading_backtesting/lean_projects:/home/vbhatnagar/code/ai_trading_backtesting/lean_projects
+      - /home/vbhatnagar/code/ai_trading_backtesting/scripts:/home/vbhatnagar/code/ai_trading_backtesting/scripts
+      - /home/vbhatnagar/code/ai_trading_backtesting/configs:/home/vbhatnagar/code/ai_trading_backtesting/configs
+      - /home/vbhatnagar/code/ai_trading_backtesting/data:/home/vbhatnagar/code/ai_trading_backtesting/data
+      - /home/vbhatnagar/code/ai_trading_backtesting/results:/home/vbhatnagar/code/ai_trading_backtesting/results
+      - /home/vbhatnagar/code/ai_trading_backtesting/.env:/home/vbhatnagar/code/ai_trading_backtesting/.env
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker access
+      - /home/vbhatnagar/.lean:/root/.lean  # LEAN CLI config
+      - /tmp:/tmp  # Share host /tmp for LEAN CLI temp files
+    environment:
+      - PYTHONUNBUFFERED=1
+      - POSTGRES_DB=trading
+      - POSTGRES_USER=mlflow
+      - POSTGRES_PASSWORD=mlflow_secure_password
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+    networks:
+      - trading-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"  # Run on demand only
+    command: ["tail", "-f", "/dev/null"]
 
 networks:
   trading-network:

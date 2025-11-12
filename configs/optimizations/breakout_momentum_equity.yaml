@@ -1,0 +1,111 @@
+strategy:
+  name: "Breakout_Momentum_Equity"
+  lean_project_path: "Breakout_Momentum_Equity"
+  category: "momentum"
+  asset_class: "equity"
+  description: "Price breakout above N-day resistance with volume spike confirmation"
+
+optimization:
+  type: "Euler Search"  # For 729 combinations (3^6)
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"
+
+  constraints:
+    - "Drawdown < 0.20"
+    - "Total Trades > 50"
+
+  parameters:
+    lookback_period:
+      start: 20
+      end: 50
+      step: 15  # 20, 35, 50
+      type: int
+      description: "N-day lookback for resistance level (high)"
+
+    breakout_threshold:
+      start: 0.01
+      end: 0.03
+      step: 0.01  # 0.01, 0.02, 0.03
+      type: float
+      description: "% above N-day high to confirm breakout"
+
+    volume_multiplier:
+      start: 1.5
+      end: 2.5
+      step: 0.5  # 1.5, 2.0, 2.5
+      type: float
+      description: "Volume must exceed avg volume × this multiplier"
+
+    holding_period:
+      start: 3
+      end: 10
+      step: 3  # 3, 6, 9 (or use values: [3, 5, 10])
+      type: int
+      description: "Maximum days to hold position"
+
+    profit_target_pct:
+      start: 0.015
+      end: 0.025
+      step: 0.005  # 0.015, 0.020, 0.025
+      type: float
+      description: "Exit early if gain >= this percentage"
+
+    stop_loss_pct:
+      start: 0.01
+      end: 0.02
+      step: 0.005  # 0.01, 0.015, 0.02
+      type: float
+      description: "Exit if loss >= this percentage"
+
+success_criteria:
+  min_trades: 50
+  min_sharpe: 1.0
+  max_drawdown: 0.20
+  min_win_rate: 0.50
+  target_avg_win: 0.01
+
+notes: |
+  Strategy Concept:
+  - Captures strong breakouts with volume confirmation
+  - N-day high = resistance level
+  - Breakout threshold avoids false signals from noise
+  - Volume confirmation ensures genuine momentum
+  - Holding period rides multi-day momentum
+  - Early exits (profit target, stop loss) manage risk
+
+  Expected Behavior:
+  - Higher frequency than SMA crossover (more breakout opportunities)
+  - Moderate trade count (50-100 over 5 years)
+  - Strong directional moves captured
+  - Good for equity universe selection (QQQ as test case)
+
+  Critical Parameters:
+  - breakout_threshold (1-3%) controls entry sensitivity
+  - volume_multiplier ensures quality signals
+  - holding_period balances momentum capture vs exit timing
+
+backtest:
+  start_date: "2020-01-01"
+  end_date: "2024-12-31"
+  initial_capital: 1000
+  resolution: "Daily"
+
+risk_management:
+  max_risk_per_trade: 0.01  # 1% of portfolio
+  position_sizing: "risk_based"  # Based on stop loss
+  max_leverage: 1.0
+
+fees:
+  brokerage: "Interactive Brokers"
+  commission_model: "IBKR_tiered"
+
+estimated_runtime:
+  total_combinations: 729  # 3×3×3×3×3×3
+  time_per_backtest: "30 seconds"
+  total_estimated_time: "6 hours"
+
+recommendations:
+  - "Start with fee estimation to validate profitability"
+  - "Test with QQQ first, then expand to other equities"
+  - "Monitor breakout_threshold impact on trade frequency"
+  - "Consider adding multiple symbols for diversification"

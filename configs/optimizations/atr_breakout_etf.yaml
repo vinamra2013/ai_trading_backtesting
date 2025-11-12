@@ -1,0 +1,75 @@
+# ATR_Breakout_ETF Optimization Configuration
+# Strategy: STR-005 (LOW priority - VOLATILITY)
+# Category: Volatility Breakout
+# Total combinations: 3×3×3 = 27
+
+strategy:
+  name: "ATR_Breakout_ETF"
+  lean_project_path: "ATR_Breakout_ETF"
+  category: "volatility"
+  asset_class: "etf"
+  description: "ATR-based breakout trading volatility expansion"
+
+backtest:
+  start_date: "2020-01-01"
+  end_date: "2024-12-31"
+  initial_capital: 1000
+  resolution: "daily"
+  brokerage: "InteractiveBrokers"
+
+optimization:
+  type: "Euler Search"
+  total_combinations: 27
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"
+
+  # Hard constraints
+  constraints:
+    - "Drawdown < 0.20"
+    - "Total Trades >= 30"
+    - "Win Rate >= 0.45"
+
+  # Parameter ranges
+  parameters:
+    atr_period:
+      description: "ATR lookback period for volatility measurement"
+      start: 10
+      end: 20
+      step: 5
+      values: [10, 14, 20]
+      default: 14
+
+    breakout_multiplier:
+      description: "ATR multiplier for breakout threshold (higher = fewer signals)"
+      start: 2.0
+      end: 3.0
+      step: 0.5
+      values: [2.0, 2.5, 3.0]
+      default: 2.5
+
+    holding_period:
+      description: "Max days to hold position"
+      start: 3
+      end: 7
+      step: 2
+      values: [3, 5, 7]
+      default: 5
+
+# Success criteria
+success_criteria:
+  min_trades: 30
+  min_sharpe: 0.8
+  max_drawdown: 0.20
+  min_win_rate: 0.45
+  max_fee_pct: 0.35
+
+# Expected results
+expected_results:
+  total_runs: 27
+  estimated_duration: "30-60 minutes"
+  expected_pass_rate: "30-40%"
+  expected_best_sharpe: "0.8-1.0"
+  key_insights:
+    - "Higher multipliers reduce trade frequency but may improve quality"
+    - "Volatility-based position sizing manages risk during high-volatility periods"
+    - "Holding period limits exposure to volatility mean reversion"

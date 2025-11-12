@@ -1,0 +1,66 @@
+strategy:
+  name: "VIX_Market_Timing"
+  lean_project_path: "VIX_Market_Timing"
+  category: "volatility"
+  asset_class: "etf"
+  description: "VIX-based market timing - Buy SPY on fear spikes, exit when fear subsides"
+
+optimization:
+  type: "Grid Search"
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"
+
+  # Risk constraints
+  constraints:
+    - "Drawdown < 0.15"
+    - "Total Trades > 10"
+
+  # Parameter grid: 3×3×3×3×3 = 243 combinations
+  parameters:
+    vix_entry_threshold:
+      start: 20
+      end: 30
+      step: 5  # [20, 25, 30] - VIX level to enter SPY
+
+    vix_exit_threshold:
+      start: 15
+      end: 20
+      step: 2.5  # [15, 17.5, 20] - VIX level to exit SPY
+
+    position_size_pct:
+      start: 0.5
+      end: 1.0
+      step: 0.25  # [0.5, 0.75, 1.0] - Percentage of portfolio
+
+    profit_target_pct:
+      start: 0.015
+      end: 0.025
+      step: 0.005  # [0.015, 0.02, 0.025] - Exit on profit
+
+    stop_loss_pct:
+      start: 0.01
+      end: 0.02
+      step: 0.005  # [0.01, 0.015, 0.02] - Exit on loss
+
+# Expected performance
+success_criteria:
+  min_trades: 10          # Low frequency - only on VIX spikes
+  min_sharpe: 1.5         # Highest target - buying dips works well
+  max_drawdown: 0.15      # 15% max drawdown
+  min_win_rate: 0.65      # 65%+ win rate (dips recover)
+
+# Fee considerations for $1K capital
+fee_assumptions:
+  per_trade_fee: 1.0      # Interactive Brokers: $1 per trade
+  expected_trades_per_year: 10
+  annual_fee_impact: 0.01  # ~1% of capital per year
+
+# Strategy notes
+notes:
+  - "VIX is fear index - inversely correlated with SPY"
+  - "Buy when VIX high (fear spike) = buy the dip"
+  - "Exit when VIX normalizes (fear subsides)"
+  - "VIX not directly tradable - SPY is trading vehicle"
+  - "Low frequency reduces fee impact"
+  - "Works well in volatile markets (2020, 2022)"
+  - "Position sizing controls risk exposure"

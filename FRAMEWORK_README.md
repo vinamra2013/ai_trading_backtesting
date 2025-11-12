@@ -49,15 +49,20 @@ nano configs/optimizations/my_strategy.yaml
 ### 4. Run Optimization
 
 ```bash
+# Activate virtual environment (required)
+source venv/bin/activate.fish
+
 # Single optimization
 python scripts/optimize_runner.py --config configs/optimizations/my_strategy.yaml
 
-# Batch mode (multiple strategies overnight)
-python scripts/optimize_runner.py --batch configs/batches/mean_reversion_batch.yaml
-
-# Estimate fees before running
+# Estimate fees before running (dry run)
 python scripts/optimize_runner.py --config configs/optimizations/my_strategy.yaml --estimate
+
+# Skip results import (useful for testing)
+python scripts/optimize_runner.py --config configs/optimizations/my_strategy.yaml --no-import
 ```
+
+**Note**: The script automatically detects Docker environment. If run on host machine, it delegates to `lean-optimizer` Docker container if available. Batch mode is not yet implemented.
 
 ### 5. View Results
 

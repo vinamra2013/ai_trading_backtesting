@@ -320,11 +320,12 @@ Symbol | Volume | ATR% | Price | Sector
 
 #### Phase 2: Strategy Backtesting
 
-**QuantConnect Cloud Backtesting**:
+**Two Backtesting Approaches**:
 
+**A. Single Strategy Testing (QuantConnect Cloud)**:
 ```bash
 # Option 1: Via automation script (easiest)
-venv/bin/python  .claude/skills/qc-backtest-runner/scripts/qc_cloud_backtest.py --open
+venv/bin/python .claude/skills/qc-backtest-runner/scripts/qc_cloud_backtest.py --open
 
 # Option 2: Via LEAN CLI
 cd lean_projects
@@ -332,25 +333,33 @@ lean cloud push --project RSIMeanReversion
 lean cloud backtest RSIMeanReversion --open
 
 # Option 3: Full workflow (commit, push, wait, save, open)
-venv/bin/python  .claude/skills/qc-backtest-runner/scripts/qc_cloud_backtest.py --commit --wait --save --open
+venv/bin/python .claude/skills/qc-backtest-runner/scripts/qc_cloud_backtest.py --commit --wait --save --open
 
 # Strategy file location: lean_projects/RSIMeanReversion/main.py
 ```
 
-**Batch Backtesting**:
+**B. Parameter Optimization (100+ Variations per Week)**:
 ```bash
-# Edit strategy parameters in: lean_projects/RSIMeanReversion/main.py
-# Then push and test:
-venv/bin/python  .claude/skills/qc-backtest-runner/scripts/qc_cloud_backtest.py --commit --open
+# CRITICAL: Strategy must use get_parameter() for all optimizable values
+# See: docs/LEAN_DEVELOPER_GUIDE.md for implementation patterns
 
-# For multiple strategies: Duplicate project folder and modify
-# Request developer to create batch automation if needed
+# Run optimization (tests multiple parameter combinations)
+venv/bin/python scripts/optimize_runner.py --config configs/optimizations/rsi_etf.yaml
+
+# Fee estimation (dry run before full optimization)
+venv/bin/python scripts/optimize_runner.py --config configs/optimizations/rsi_etf.yaml --estimate
+
+# Results automatically stored in PostgreSQL database
+# Query via: docker exec mlflow-postgres psql -U mlflow -d trading
 ```
 
 **Results Validation**:
 ```bash
-# Results appear in terminal automatically
-# Or view at: https://www.quantconnect.com/project/26136271
+# Single backtest: Results appear in terminal or at:
+# https://www.quantconnect.com/project/26136271
+
+# Optimization results: Query PostgreSQL database
+docker exec mlflow-postgres psql -U mlflow -d trading -c "SELECT * FROM strategy_leaderboard LIMIT 10;"
 
 # Download specific backtest results:
 lean cloud results <backtest-id>
@@ -358,7 +367,42 @@ lean cloud results <backtest-id>
 
 #### Phase 3: Strategy Ranking
 
-**Manual Ranking Process**:
+**Automated Ranking (PostgreSQL Database)**:
+```bash
+# View top performers (automatic PASS/FAIL evaluation)
+docker exec mlflow-postgres psql -U mlflow -d trading -c "
+SELECT rank, strategy_name, sharpe_ratio, total_return, max_drawdown,
+       total_trades, win_rate, avg_win
+FROM strategy_leaderboard
+LIMIT 10;
+"
+
+# Parameter sensitivity analysis
+docker exec mlflow-postgres psql -U mlflow -d trading -c "
+SELECT parameter_name, parameter_value, avg_sharpe, test_count
+FROM parameter_performance
+WHERE strategy_name = 'RSI_MeanReversion_ETF'
+ORDER BY avg_sharpe DESC
+LIMIT 20;
+"
+
+# Fee impact analysis (critical for small accounts)
+docker exec mlflow-postgres psql -U mlflow -d trading -c "
+SELECT strategy_name, avg_fees, avg_fee_pct_of_capital, avg_trades
+FROM fee_analysis
+ORDER BY avg_fee_pct_of_capital DESC;
+"
+
+# Daily summary
+docker exec mlflow-postgres psql -U mlflow -d trading -c "
+SELECT date, total_backtests, passed, best_sharpe
+FROM daily_summary
+ORDER BY date DESC
+LIMIT 7;
+"
+```
+
+**Manual Ranking Process** (for single backtests):
 1. Review terminal output from each backtest
 2. Document key metrics in session notes:
    - Sharpe Ratio
@@ -367,21 +411,6 @@ lean cloud results <backtest-id>
    - Win Rate
    - Trade Frequency
 3. Create strategy leaderboard table in notes
-
-**Developer Request for Automation**:
-```
-Developer Request:
-I need a strategy ranking tool that can:
-- Parse QuantConnect backtest results (from cloud or local downloads)
-- Rank strategies by multi-criteria scoring:
-  * Sharpe Ratio (40%)
-  * Consistency (20%)
-  * Drawdown Control (20%)
-  * Trade Frequency (10%)
-  * Capital Efficiency (10%)
-- Output ranked CSV/table with top performers
-- Filter by minimum trade count, Sharpe threshold, etc.
-```
 
 #### Phase 4: Portfolio Construction
 
@@ -394,12 +423,30 @@ I need a strategy ranking tool that can:
    - Expected weekly return
 4. Document allocation plan in session notes
 
-**Developer Request for Automation**:
+**Portfolio Construction Query**:
+```bash
+# Get best parameter combination for deployment
+docker exec mlflow-postgres psql -U mlflow -d trading -c "
+SELECT parameters, sharpe_ratio, total_return, max_drawdown,
+       total_trades, win_rate, qc_backtest_url
+FROM backtest_results
+WHERE strategy_id = (SELECT id FROM strategies WHERE name = 'RSI_MeanReversion_ETF')
+  AND meets_criteria = true
+ORDER BY sharpe_ratio DESC
+LIMIT 1;
+"
+
+# Select top 3 uncorrelated strategies manually
+# Calculate correlation using historical returns
+# Allocate capital: equal weight or volatility-adjusted
+```
+
+**Developer Request for Advanced Automation** (if needed):
 ```
 Developer Request:
 I need a portfolio construction tool that can:
 - Take top N strategies from ranking
-- Calculate correlation matrix
+- Calculate correlation matrix from backtest results
 - Filter out highly correlated pairs (>0.7)
 - Allocate capital using equal weight, volatility-adjusted, or risk parity
 - Output portfolio allocation CSV with:
@@ -455,6 +502,45 @@ I need a portfolio construction tool that can:
 - Max Drawdown: Target <15%
 
 **Current Project**: https://www.quantconnect.com/project/26136271
+
+---
+
+### AUTOMATION FRAMEWORK REFERENCE
+
+**Optimization System** (100+ variations per week):
+```bash
+# Run parameter optimization
+venv/bin/python scripts/optimize_runner.py --config configs/optimizations/rsi_etf.yaml
+
+# Expected output: "72 runs complete, 3 passed, best Sharpe: 1.8"
+```
+
+**Query Results (PostgreSQL)**:
+```bash
+# Top performers
+docker exec mlflow-postgres psql -U mlflow -d trading -c "SELECT * FROM strategy_leaderboard LIMIT 10;"
+
+# Parameter analysis
+docker exec mlflow-postgres psql -U mlflow -d trading -c "
+SELECT parameter_name, parameter_value, avg_sharpe
+FROM parameter_performance
+WHERE strategy_name = 'RSI_MeanReversion_ETF'
+ORDER BY avg_sharpe DESC
+LIMIT 20;
+"
+
+# Fee impact (critical for $1K capital)
+docker exec mlflow-postgres psql -U mlflow -d trading -c "SELECT * FROM fee_analysis;"
+```
+
+**Key Learning**: Fees kill small accounts - 822 trades on $1K = $674 fees (67% of capital!)
+
+**Documentation**:
+- Framework overview: `FRAMEWORK_README.md`
+- Docker setup: `DOCKER_SETUP_COMPLETE.md`
+- Implementation guide: `AUTOMATION_SCRIPTS_COMPLETE.md`
+- LEAN API patterns: `docs/LEAN_DEVELOPER_GUIDE.md`
+- Strategy backlog: `data/strategy_backlog.yaml` (15 strategies prioritized)
 
 ---
 

@@ -1,0 +1,67 @@
+# Relative_Strength_Leaders Optimization Configuration
+# Strategy: STR-012 (LOW priority - MOMENTUM)
+# Category: Relative Strength Momentum
+# Total combinations: 3×3 = 9
+
+strategy:
+  name: "Relative_Strength_Leaders"
+  lean_project_path: "Relative_Strength_Leaders"
+  category: "momentum"
+  asset_class: "etf"
+  description: "Relative strength momentum trading QQQ outperformance vs SPY"
+
+backtest:
+  start_date: "2020-01-01"
+  end_date: "2024-12-31"
+  initial_capital: 1000
+  resolution: "daily"
+  brokerage: "InteractiveBrokers"
+
+optimization:
+  type: "Euler Search"
+  total_combinations: 9
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"
+
+  # Hard constraints
+  constraints:
+    - "Drawdown < 0.15"
+    - "Total Trades >= 40"
+    - "Win Rate >= 0.50"
+
+  # Parameter ranges
+  parameters:
+    lookback_period:
+      description: "Lookback period for relative strength calculation"
+      start: 20
+      end: 50
+      step: 15
+      values: [20, 30, 50]
+      default: 30
+
+    holding_period:
+      description: "Days to hold position"
+      start: 3
+      end: 10
+      step: 3
+      values: [3, 5, 10]
+      default: 5
+
+# Success criteria
+success_criteria:
+  min_trades: 40
+  min_sharpe: 0.8
+  max_drawdown: 0.15
+  min_win_rate: 0.50
+  max_fee_pct: 0.30
+
+# Expected results
+expected_results:
+  total_runs: 9
+  estimated_duration: "15-30 minutes"
+  expected_pass_rate: "30-40%"
+  expected_best_sharpe: "0.8-1.0"
+  key_insights:
+    - "Longer lookback periods identify more sustainable momentum trends"
+    - "Relative strength filters out market-wide movements"
+    - "Tech-heavy QQQ vs broad SPY provides good momentum opportunities"

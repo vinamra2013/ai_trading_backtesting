@@ -136,6 +136,36 @@ lean cloud live "RSIMeanReversion" \
 - [ ] Capital allocation documented and approved
 - [ ] Risk management parameters set correctly
 
+## Optimization Framework
+
+**Purpose**: Test 100+ strategy variations per week with minimal effort
+
+**Components**:
+- `scripts/optimize_runner.py` - Main automation orchestrator
+- `scripts/results_importer.py` - Parse LEAN JSON → PostgreSQL
+- `scripts/db_schema.sql` - PostgreSQL schema (strategies, optimization_runs, backtest_results)
+- `configs/optimizations/*.yaml` - Configuration files for optimizations
+- `docs/LEAN_DEVELOPER_GUIDE.md` - Complete API reference with validated patterns
+
+**PostgreSQL Database** (Docker):
+- Container: `mlflow-postgres`
+- Database: `trading`
+- User: `mlflow`
+- Password: password is in .env
+- Port: `5432` (exposed to host)
+
+**Database Views**:
+- `strategy_leaderboard` - Top performers ranked by Sharpe
+- `parameter_performance` - Parameter sensitivity analysis
+- `fee_analysis` - Fee impact by strategy (critical for $1K capital)
+- `daily_summary` - Daily backtesting activity
+
+**Documentation**:
+- Framework overview: `FRAMEWORK_README.md`
+- Docker setup: `DOCKER_SETUP_COMPLETE.md`
+- Implementation guide: `AUTOMATION_SCRIPTS_COMPLETE.md`
+- Strategy backlog: `data/strategy_backlog.yaml`
+
 ## Data Management
 
 ### QuantConnect Cloud Data
@@ -164,37 +194,92 @@ lean data download --dataset "US Equities" \
 
 ## Strategy Development Workflow
 
-### 1. Create New Strategy
+### Approach A: Single Strategy Testing (for initial validation)
 
+**1. Create New Strategy**
 ```bash
 cd lean_projects
 lean project-create "MyNewStrategy" --language python
 ```
 
-### 2. Edit Strategy
-
+**2. Edit Strategy**
 ```bash
 nano lean_projects/MyNewStrategy/main.py
 ```
 
-### 3. Test Locally (Optional)
-
+**3. Test Locally** (Optional)
 ```bash
 cd lean_projects
 lean backtest "MyNewStrategy"
 ```
 
-### 4. Test on Cloud
-
+**4. Test on Cloud**
 ```bash
 python scripts/qc_cloud_backtest.py --open
 ```
 
-### 5. Iterate
-
+**5. Iterate**
 Repeat steps 2-4 until performance meets targets.
 
-### 6. Deploy Live
+### Approach B: Parameter Optimization (for testing 100+ variations)
+
+**1. Create Optimizable Strategy**
+
+**CRITICAL**: Strategy must use `get_parameter()` for all optimizable values.
+
+```python
+from AlgorithmImports import *
+
+class RSIMeanReversionETF(QCAlgorithm):
+    def initialize(self):
+        # Use get_parameter() for ALL optimizable values
+        rsi_period = int(self.get_parameter("rsi_period", "14"))
+        entry_threshold = int(self.get_parameter("entry_threshold", "30"))
+        exit_threshold = int(self.get_parameter("exit_threshold", "60"))
+
+        # Rest of strategy...
+```
+
+See `docs/LEAN_DEVELOPER_GUIDE.md` for complete patterns.
+
+**2. Create Optimization Config**
+```bash
+# Copy template
+cp configs/optimizations/template.yaml configs/optimizations/my_strategy.yaml
+
+# Edit parameters
+nano configs/optimizations/my_strategy.yaml
+```
+
+**3. Run Optimization**
+```bash
+# Fee estimation first (recommended)
+venv/bin/python scripts/optimize_runner.py --config configs/optimizations/my_strategy.yaml --estimate
+
+# Run optimization (tests all parameter combinations)
+venv/bin/python scripts/optimize_runner.py --config configs/optimizations/my_strategy.yaml
+
+# Expected output: "72 runs complete, 3 passed, best Sharpe: 1.8"
+```
+
+**4. Query Results**
+```bash
+# View top performers
+docker exec mlflow-postgres psql -U mlflow -d trading -c "SELECT * FROM strategy_leaderboard LIMIT 10;"
+
+# Daily summary
+docker exec mlflow-postgres psql -U mlflow -d trading -c "SELECT * FROM daily_summary;"
+
+# Parameter analysis
+docker exec mlflow-postgres psql -U mlflow -d trading -c "
+SELECT parameter_name, parameter_value, avg_sharpe
+FROM parameter_performance
+WHERE strategy_name = 'RSI_MeanReversion_ETF'
+ORDER BY avg_sharpe DESC;
+"
+```
+
+### Deploy Live
 
 ```bash
 lean cloud live "MyNewStrategy" \
@@ -304,8 +389,12 @@ lean cloud live list
 **File Locations**:
 - Strategy code: `lean_projects/RSIMeanReversion/main.py`
 - LEAN config: `lean_projects/lean.json`
-- Automation script: `scripts/qc_cloud_backtest.py`
+- Cloud backtest: `scripts/qc_cloud_backtest.py`
+- Optimization: `scripts/optimize_runner.py`
+- Results import: `scripts/results_importer.py`
+- Config templates: `configs/optimizations/template.yaml`
 - Session notes: `data/notes/`
+- Strategy backlog: `data/strategy_backlog.yaml`
 
 **Web Interfaces**:
 - QuantConnect Dashboard: https://www.quantconnect.com
