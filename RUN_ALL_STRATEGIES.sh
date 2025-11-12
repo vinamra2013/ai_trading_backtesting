@@ -7,7 +7,7 @@ set -e  # Exit on error
 cd /home/vbhatnagar/code/ai_trading_backtesting
 
 # Activate virtual environment
-source venv/bin/activate.fish
+source venv/bin/activate
 
 echo "=========================================="
 echo "STRATEGY OPTIMIZATION - COMPLETE SUITE"
@@ -22,20 +22,20 @@ echo "START: HIGH Priority Strategies"
 echo "================================"
 
 echo "STR-001: RSI_MeanReversion_ETF"
-python scripts/optimize_runner.py --config configs/optimizations/rsi_etf_lowfreq.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/rsi_etf_lowfreq.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-001_rsi_etf_lowfreq.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-001_rsi_etf_lowfreq.yaml
 echo "✓ STR-001 COMPLETE"
 echo ""
 
 echo "STR-002: BollingerBand_ETF_LowFreq"
-python scripts/optimize_runner.py --config configs/optimizations/bollinger_etf_lowfreq.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/bollinger_etf_lowfreq.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-002_bollinger_etf_lowfreq.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-002_bollinger_etf_lowfreq.yaml
 echo "✓ STR-002 COMPLETE"
 echo ""
 
 echo "STR-009: MeanReversion_TrendFilter_ETF (A/B Test)"
-python scripts/optimize_runner.py --config configs/optimizations/meanreversion_trendfilter_etf.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/meanreversion_trendfilter_etf.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-009_meanreversion_trendfilter_etf.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-009_meanreversion_trendfilter_etf.yaml
 echo "✓ STR-009 COMPLETE"
 echo ""
 
@@ -47,32 +47,32 @@ echo "START: MEDIUM Priority Strategies"
 echo "=================================="
 
 echo "STR-003: SMA_Crossover_ETF"
-python scripts/optimize_runner.py --config configs/optimizations/sma_crossover_etf.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/sma_crossover_etf.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-003_sma_crossover_etf.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-003_sma_crossover_etf.yaml
 echo "✓ STR-003 COMPLETE"
 echo ""
 
 echo "STR-004: Breakout_Momentum_Equity"
-python scripts/optimize_runner.py --config configs/optimizations/breakout_momentum_equity.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/breakout_momentum_equity.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-004_breakout_momentum_equity.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-004_breakout_momentum_equity.yaml
 echo "✓ STR-004 COMPLETE"
 echo ""
 
 echo "STR-006: VIX_Market_Timing"
-python scripts/optimize_runner.py --config configs/optimizations/vix_market_timing.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/vix_market_timing.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-006_vix_market_timing.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-006_vix_market_timing.yaml
 echo "✓ STR-006 COMPLETE"
 echo ""
 
 echo "STR-008: RSI_MACD_Combo_ETF"
-python scripts/optimize_runner.py --config configs/optimizations/rsi_macd_combo_etf.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/rsi_macd_combo_etf.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-008_rsi_macd_combo_etf.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-008_rsi_macd_combo_etf.yaml
 echo "✓ STR-008 COMPLETE"
 echo ""
 
 echo "STR-013: Gap_Trading_Overnight"
-python scripts/optimize_runner.py --config configs/optimizations/gap_trading_overnight.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/gap_trading_overnight.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-013_gap_trading_overnight.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-013_gap_trading_overnight.yaml
 echo "✓ STR-013 COMPLETE"
 echo ""
 
@@ -84,38 +84,38 @@ echo "START: LOW Priority Strategies"
 echo "=============================="
 
 echo "STR-005: ATR_Breakout_ETF"
-python scripts/optimize_runner.py --config configs/optimizations/atr_breakout_etf.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/atr_breakout_etf.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-005_atr_breakout_etf.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-005_atr_breakout_etf.yaml
 echo "✓ STR-005 COMPLETE"
 echo ""
 
 echo "STR-010: Earnings_Momentum"
-python scripts/optimize_runner.py --config configs/optimizations/earnings_momentum.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/earnings_momentum.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-010_earnings_momentum.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-010_earnings_momentum.yaml
 echo "✓ STR-010 COMPLETE"
 echo ""
 
 echo "STR-011: Statistical_Pairs_Trading"
-python scripts/optimize_runner.py --config configs/optimizations/statistical_pairs_trading.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/statistical_pairs_trading.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-011_statistical_pairs_trading.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-011_statistical_pairs_trading.yaml
 echo "✓ STR-011 COMPLETE"
 echo ""
 
 echo "STR-012: Relative_Strength_Leaders"
-python scripts/optimize_runner.py --config configs/optimizations/relative_strength_leaders.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/relative_strength_leaders.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-012_relative_strength_leaders.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-012_relative_strength_leaders.yaml
 echo "✓ STR-012 COMPLETE"
 echo ""
 
 echo "STR-014: Donchian_Breakout_ETF"
-python scripts/optimize_runner.py --config configs/optimizations/donchian_breakout_etf.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/donchian_breakout_etf.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-014_donchian_breakout_etf.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-014_donchian_breakout_etf.yaml
 echo "✓ STR-014 COMPLETE"
 echo ""
 
 echo "STR-015: Quality_Factor_Momentum"
-python scripts/optimize_runner.py --config configs/optimizations/quality_factor_momentum.yaml --estimate
-python scripts/optimize_runner.py --config configs/optimizations/quality_factor_momentum.yaml
+python scripts/optimize_runner.py --config configs/optimizations/STR-015_quality_factor_momentum.yaml --estimate
+python scripts/optimize_runner.py --config configs/optimizations/STR-015_quality_factor_momentum.yaml
 echo "✓ STR-015 COMPLETE"
 echo ""
 

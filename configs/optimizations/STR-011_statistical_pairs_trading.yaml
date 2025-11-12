@@ -1,0 +1,67 @@
+# Statistical_Pairs_Trading Optimization Configuration
+# Strategy: STR-011 (LOW priority - MEAN REVERSION)
+# Category: Statistical Arbitrage
+# Total combinations: 3×3 = 9
+
+strategy:
+  name: "Statistical_Pairs_Trading"
+  lean_project_path: "STR-011_Statistical_Pairs_Trading"
+  category: "mean_reversion"
+  asset_class: "etf"
+  description: "Simplified pairs trading using QQQ vs SPY spread divergence"
+
+backtest:
+  start_date: "2020-01-01"
+  end_date: "2024-12-31"
+  initial_capital: 1000
+  resolution: "daily"
+  brokerage: "InteractiveBrokers"
+
+optimization:
+  type: "Euler Search"
+  total_combinations: 9
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"
+
+  # Hard constraints
+  constraints:
+    - "Drawdown < 0.15"
+    - "Total Trades >= 40"
+    - "Win Rate >= 0.50"
+
+  # Parameter ranges
+  parameters:
+    sma_period:
+      description: "Lookback period for spread mean calculation"
+      start: 30
+      end: 100
+      step: 35
+      values: [30, 50, 100]
+      default: 50
+
+    std_dev_threshold:
+      description: "Standard deviations for divergence entry"
+      start: 1.5
+      end: 2.5
+      step: 0.5
+      values: [1.5, 2.0, 2.5]
+      default: 2.0
+
+# Success criteria
+success_criteria:
+  min_trades: 40
+  min_sharpe: 0.9
+  max_drawdown: 0.15
+  min_win_rate: 0.50
+  max_fee_pct: 0.30
+
+# Expected results
+expected_results:
+  total_runs: 9
+  estimated_duration: "15-30 minutes"
+  expected_pass_rate: "30-40%"
+  expected_best_sharpe: "0.9-1.1"
+  key_insights:
+    - "Longer SMA periods provide more stable spread mean"
+    - "Higher std dev thresholds reduce trade frequency but improve quality"
+    - "QQQ vs SPY correlation makes this pair suitable for mean reversion"

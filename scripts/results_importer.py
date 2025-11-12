@@ -83,6 +83,10 @@ def parse_backtest_result(json_file):
         # Try to extract standard metrics
         result = {}
 
+        # Skip order-events.json files (they're lists, not dicts)
+        if isinstance(data, list):
+            return None
+
         # Try to find Statistics section (most common location)
         if 'Statistics' in data:
             stats = data['Statistics']
@@ -93,6 +97,10 @@ def parse_backtest_result(json_file):
         else:
             # Fallback: try to find metrics directly
             stats = data
+
+        # Verify stats is a dict before calling .get() methods
+        if not isinstance(stats, dict):
+            return None
 
         # Extract parameters (from ParameterSet if present)
         parameters = {}

@@ -1,0 +1,98 @@
+strategy:
+  name: "SMA_Crossover_ETF"
+  lean_project_path: "STR-003_SMA_Crossover_ETF"
+  category: "momentum"
+  asset_class: "etf"
+  description: "Classic SMA crossover with volume confirmation for trend following"
+
+optimization:
+  type: "Grid Search"  # 243 combinations (manageable for grid search)
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"
+
+  constraints:
+    - "Drawdown < 0.15"
+    - "Total Trades > 20"
+    - "Win Rate > 0.50"
+
+  parameters:
+    fast_sma:
+      type: "int"
+      start: 20
+      end: 50
+      step: 15  # Values: 20, 35, 50
+      description: "Fast SMA period (shorter trend)"
+
+    slow_sma:
+      type: "int"
+      start: 100
+      end: 200
+      step: 50  # Values: 100, 150, 200
+      description: "Slow SMA period (longer trend)"
+
+    volume_threshold:
+      type: "float"
+      start: 1.2
+      end: 2.0
+      step: 0.4  # Values: 1.2, 1.6, 2.0
+      description: "Volume multiplier for confirmation"
+
+    profit_target_pct:
+      type: "float"
+      start: 0.015
+      end: 0.025
+      step: 0.005  # Values: 0.015, 0.020, 0.025
+      description: "Profit target percentage"
+
+    stop_loss_pct:
+      type: "float"
+      start: 0.01
+      end: 0.02
+      step: 0.005  # Values: 0.010, 0.015, 0.020
+      description: "Stop loss percentage"
+
+# Total combinations: 3 × 3 × 3 × 3 × 3 = 243
+
+success_criteria:
+  min_trades: 20  # Fewer trades expected for trend-following
+  min_sharpe: 1.2
+  max_drawdown: 0.15
+  min_win_rate: 0.50
+  max_fee_pct: 0.30  # Fee impact threshold
+  min_avg_win: 0.01  # 1%+ average win
+
+backtest_settings:
+  start_date: "2020-01-01"
+  end_date: "2024-12-31"
+  initial_capital: 1000
+  resolution: "Daily"
+  brokerage: "InteractiveBrokersBrokerage"
+
+notes: |
+  SMA Crossover Strategy (STR-003)
+
+  Strategy Type: Momentum / Trend Following
+
+  Core Logic:
+  - Entry: Golden Cross (fast SMA > slow SMA) + Volume confirmation
+  - Exit: Death Cross (fast SMA < slow SMA) OR profit target OR stop loss
+
+  Key Characteristics:
+  - Trend-following (not mean reversion)
+  - Longer holding periods (2-10 days)
+  - Fewer trades per year (20-40 expected)
+  - Volume filter reduces false breakouts
+  - Risk-based position sizing (1% max risk per trade)
+
+  Expected Performance:
+  - Sharpe: 1.2+
+  - Win rate: 50%+
+  - Max drawdown: <15%
+  - Average win: 1%+
+
+  Parameter Ranges:
+  - Fast SMA: 20-50 (captures short-term trend)
+  - Slow SMA: 100-200 (confirms long-term trend)
+  - Volume threshold: 1.2-2.0x (confirms genuine moves)
+  - Profit target: 1.5-2.5% (realistic for ETF)
+  - Stop loss: 1.0-2.0% (risk management)

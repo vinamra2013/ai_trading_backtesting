@@ -93,3 +93,7 @@ lean_projects/data/
 old/data/
 packages-microsoft-prod.deb
 lean_projects/**/*log.txt
+0.7
+0.45
+100
+lean_projects/**/*.txt

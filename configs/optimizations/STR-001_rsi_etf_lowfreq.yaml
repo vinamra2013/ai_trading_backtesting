@@ -1,0 +1,113 @@
+# RSI Mean Reversion ETF - Low Frequency Optimization Configuration
+# Strategy: STR-001
+# Optimization Type: Euler Search (486 combinations)
+# Expected Runtime: ~8-10 hours on QuantConnect Cloud
+
+strategy:
+  name: "RSI_MeanReversion_ETF"
+  lean_project_path: "STR-001_RSI_MeanReversion_ETF"
+  category: "mean_reversion"
+  asset_class: "etf"
+  description: "RSI-based mean reversion on SPY with relaxed thresholds for consistent signals"
+
+optimization:
+  type: "Euler Search"  # Efficiently tests all 486 parameter combinations
+  target_metric: "Sharpe Ratio"
+  target_direction: "max"  # Maximize Sharpe Ratio
+
+  # Hard constraints - filter out results that don't meet these
+  constraints:
+    - "Drawdown < 0.15"        # Max 15% drawdown
+    - "Total Trades > 100"     # Minimum 100 trades for statistical significance
+    - "Win Rate > 0.45"        # At least 45% win rate
+    - "PSR > 0.7"              # Probabilistic Sharpe Ratio > 0.7 for confidence
+
+  # Parameter search space
+  # Total combinations: 6 × 3 × 3 × 3 × 3 = 486
+  parameters:
+    rsi_period:
+      start: 10
+      end: 20
+      step: 2
+      type: int
+      description: "RSI lookback period (shorter = more signals, longer = smoother)"
+
+    entry_threshold:
+      start: 25
+      end: 35
+      step: 5
+      type: int
+      description: "RSI oversold threshold for entry (lower = fewer signals but stronger)"
+
+    exit_threshold:
+      start: 50
+      end: 70
+      step: 10
+      type: int
+      description: "RSI overbought threshold for exit (higher = longer holding periods)"
+
+    stop_loss_pct:
+      start: 0.01
+      end: 0.02
+      step: 0.005
+      type: float
+      description: "Stop loss percentage (1-2% range for risk control)"
+
+    profit_target_pct:
+      start: 0.015
+      end: 0.025
+      step: 0.005
+      type: float
+      description: "Profit target percentage (1.5-2.5% range for realistic gains)"
+
+# Success criteria for automated evaluation
+success_criteria:
+  min_trades: 100              # Statistical significance
+  min_sharpe: 1.0              # Sharpe > 1.0 indicates good risk-adjusted returns
+  max_drawdown: 0.15           # 15% max drawdown
+  min_win_rate: 0.45           # 45% minimum win rate
+  max_fee_pct: 0.30            # Fees should be < 30% of total returns
+  min_avg_win: 0.01            # Average winning trade > 1%
+  min_psr: 0.7                 # Probabilistic Sharpe Ratio > 0.7
+
+# Backtest configuration
+backtest:
+  start_date: "2020-01-01"
+  end_date: "2024-12-31"
+  initial_capital: 1000
+  data_resolution: "Daily"
+  brokerage: "InteractiveBrokersBrokerage"
+
+# Reporting preferences
+reporting:
+  save_top_n: 10               # Save top 10 parameter sets
+  plot_metrics:
+    - "Sharpe Ratio"
+    - "Total Trades"
+    - "Drawdown"
+    - "Win Rate"
+    - "Net Profit"
+  export_formats:
+    - "csv"
+    - "json"
+
+# Notes from strategy development
+notes: |
+  Lessons Learned from Original Implementation:
+  - RSI < 25 was too restrictive (only 8 trades in 5 years)
+  - Need relaxed entry thresholds: 25, 30, 35 for more signals
+  - Daily resolution critical for fee control with $1K capital
+  - Risk management (1% max per trade) is non-negotiable
+  - Position sizing must respect stop loss percentage
+
+  Expected Outcomes:
+  - 100-150 trades over 5-year backtest
+  - Sharpe ratio > 1.0 from best parameter sets
+  - Max drawdown < 15% across all valid combinations
+  - Fee percentage < 30% of net profit
+
+  Optimization Strategy:
+  - Euler Search tests all 486 combinations systematically
+  - Focus on Sharpe Ratio as primary metric (risk-adjusted returns)
+  - Hard constraints filter out underperforming parameter sets
+  - Top 10 results saved for further analysis
