@@ -55,7 +55,6 @@ CREATE TABLE IF NOT EXISTS backtest_results (
     metrics JSONB NOT NULL,                  -- All metrics as JSON {"sharpe_ratio": 1.45, "total_return": 0.234, ...}
     meets_criteria BOOLEAN DEFAULT false,    -- Whether result passes success criteria
     rejection_reasons JSON,                  -- Array of reasons as JSON ["insufficient_trades", "high_drawdown"]
-    mlflow_run_id VARCHAR(255),              -- MLflow experiment tracking
     qc_backtest_id VARCHAR(100) UNIQUE,      -- QuantConnect backtest ID
     created_at TIMESTAMP DEFAULT NOW()
 );

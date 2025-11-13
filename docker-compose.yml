@@ -1,110 +1,77 @@
 services:
-  # Backtrader Trading Engine
-  backtrader:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: backtrader-engine
-    env_file:
-      - .env
-    volumes:
-      - ./algorithms:/app/algorithms
-      - ./strategies:/app/strategies
-      - ./config:/app/config
-      - ./data:/app/data
-      - ./results:/app/results
-      - ./logs:/app/logs
-      - ./scripts:/app/scripts
-      - ./utils:/app/utils
-      - ./.env:/app/.env
-    working_dir: /app
-    environment:
-      - PYTHONUNBUFFERED=1
-      - BACKTRADER_ENGINE_PATH=/app
-      - PYTHONPATH=/app
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - IB_HOST=${IB_HOST}
-      - FINNHUB_API_KEY=${FINNHUB_API_KEY}
-    networks:
-      - trading-network
-    depends_on:
-      - ib-gateway
-      - sqlite
-      - mlflow
-      - postgres
-    restart: unless-stopped
-    command: ["tail", "-f", "/dev/null"]
+  # Backtrader Trading Engine (commented out - not needed for V2 optimization)
+  # backtrader:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: backtrader-engine
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - ./algorithms:/app/algorithms
+  #     - ./strategies:/app/strategies
+  #     - ./config:/app/config
+  #     - ./data:/app/data
+  #     - ./results:/app/results
+  #     - ./logs:/app/logs
+  #     - ./scripts:/app/scripts
+  #     - ./utils:/app/utils
+  #     - ./.env:/app/.env
+  #   working_dir: /app
+  #   environment:
+  #     - PYTHONUNBUFFERED=1
+  #     - BACKTRADER_ENGINE_PATH=/app
+  #     - PYTHONPATH=/app
+  #     - MLFLOW_TRACKING_URI=http://mlflow:5000
+  #     - IB_HOST=${IB_HOST}
+  #     - FINNHUB_API_KEY=${FINNHUB_API_KEY}
+  #   networks:
+  #     - trading-network
+  #   depends_on:
+  #     - ib-gateway
+  #     - sqlite
+  #     - mlflow
+  #     - postgres
+  #   restart: unless-stopped
+  #   command: ["tail", "-f", "/dev/null"]
 
-  # Interactive Brokers Gateway (extrange/ibkr-docker)
-  ib-gateway:
-    image: ghcr.io/extrange/ibkr:stable
-    container_name: ib-gateway
-    ulimits:
-      nofile: 10000  # Prevent FD table errors
-    env_file:
-      - .env
-    environment:
-      - USERNAME=${IB_USERNAME}
-      - PASSWORD=${IB_PASSWORD}
-      - GATEWAY_OR_TWS=gateway
-      - TWOFA_TIMEOUT_ACTION=restart
-      - IBC_TradingMode=${IB_TRADING_MODE:-paper}
-      - IBC_ReadOnlyApi=no
-      - ReadOnlyApi=no
-      - IBC_AcceptNonBrokerageAccountWarning=yes
-      - IBC_AcceptIncomingConnectionAction=accept
-      - IBC_TrustedTwsApiClientIPs=172.25.0.0/16
-    ports:
-      - "6080:6080"  # noVNC browser access
-      - "8888:8888"  # API access (unified port for paper/live) - accessible from Docker network
-    networks:
-      - trading-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8888"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # SQLite Database (for trade history)
-  sqlite:
-    image: nouchka/sqlite3:latest
-    container_name: sqlite-db
-    volumes:
-      - ./data/sqlite:/root/db
-    networks:
-      - trading-network
-    restart: unless-stopped
-
-  # Streamlit Monitoring Dashboard
-  monitoring:
-    build:
-      context: .
-      dockerfile: Dockerfile.monitoring
-    container_name: monitoring-dashboard
-    volumes:
-      - ./monitoring:/app/monitoring
-      - ./scripts:/app/scripts:ro
-      - ./data:/app/data:ro
-      - ./results:/app/results:ro
-      - ./logs:/app/logs:ro
-    ports:
-      - "8501:8501"  # Streamlit default port
-    environment:
-      - STREAMLIT_SERVER_PORT=8501
-      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
-    networks:
-      - trading-network
-    depends_on:
-      - sqlite
-    restart: unless-stopped
+  # Interactive Brokers Gateway (commented out - not needed for V2 optimization)
+  # ib-gateway:
+  #   image: ghcr.io/extrange/ibkr:stable
+  #   container_name: ib-gateway
+  #   ulimits:
+  #     nofile: 10000  # Prevent FD table errors
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - USERNAME=${IB_USERNAME}
+  #     - PASSWORD=${IB_PASSWORD}
+  #     - GATEWAY_OR_TWS=gateway
+  #     - TWOFA_TIMEOUT_ACTION=restart
+  #     - IBC_TradingMode=${IB_TRADING_MODE:-paper}
+  #     - IBC_ReadOnlyApi=no
+  #     - ReadOnlyApi=no
+  #     - IBC_AcceptNonBrokerageAccountWarning=yes
+  #     - IBC_AcceptIncomingConnectionAction=accept
+  #     - IBC_TrustedTwsApiClientIPs=172.25.0.0/16
+  #   ports:
+  #     - "6080:6080"  # noVNC browser access
+  #     - "8888:8888"  # API access (unified port for paper/live) - accessible from Docker network
+  #   networks:
+  #     - trading-network
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "nc", "-z", "localhost", "8888"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
   # PostgreSQL Database (MLflow Backend + Optuna Storage + Trading Framework)
   postgres:
     image: postgres:16-alpine
     container_name: mlflow-postgres
     environment:
-      POSTGRES_DB: mlflow
+      POSTGRES_DB: trading
       POSTGRES_USER: mlflow
       POSTGRES_PASSWORD: mlflow_secure_password
     ports:
@@ -119,43 +86,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # MLflow Tracking Server (Experiment Tracking & Artifact Storage)
-  mlflow:
-    build:
-      context: .
-      dockerfile: Dockerfile.mlflow
-    container_name: mlflow-tracking
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./mlflow/artifacts:/mlflow/artifacts
-      - ./mlflow/backend:/mlflow/backend
-    environment:
-      - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:mlflow_secure_password@postgres:5432/mlflow
-      - MLFLOW_ARTIFACTS_DESTINATION=/mlflow/artifacts
-      - MLFLOW_SERVER_HOST=0.0.0.0
-      - MLFLOW_SERVER_PORT=5000
-      - MLFLOW_SERVER_FILE_STORE=filesystem
-      - MLFLOW_SERVER_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
-      - GUNICORN_CMD_ARGS="--bind=0.0.0.0:5000 --workers=1 --threads=1 --worker-class=gthread --access-logfile=- --error-logfile=-"
-    command: >
-      mlflow server
-      --backend-store-uri postgresql://mlflow:mlflow_secure_password@postgres:5432/mlflow
-      --default-artifact-root /mlflow/artifacts
-      --host 0.0.0.0
-      --port 5000
-    networks:
-      - trading-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # Redis Queue for Parallel Backtesting
   redis:
@@ -173,40 +103,6 @@ services:
       timeout: 3s
       retries: 3
 
-  # Parallel Backtest Worker (Scalable)
-  backtest-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    container_name: backtest-worker
-    volumes:
-      - ./strategies:/app/strategies:ro
-      - ./config:/app/config:ro
-      - ./data:/app/data:ro
-      - ./results:/app/results:rw
-      - ./scripts:/app/scripts:ro
-      - ./utils:/app/utils:ro
-    environment:
-      - PYTHONUNBUFFERED=1
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - LOG_LEVEL=INFO
-    networks:
-      - trading-network
-    depends_on:
-      - redis
-      - mlflow
-    deploy:
-      replicas: 1  # Fixed to 1 worker to avoid scaling issues
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import redis; r=redis.Redis('redis',6379); r.ping()"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
   # FastAPI Backend Service (Epic 25)
   fastapi-backend:
     build:
@@ -217,7 +113,7 @@ services:
       - "8230:8230"  # FastAPI default port
     volumes:
       - ./backend:/app/backend:ro
-      - ./config:/app/config:ro
+      - ./configs:/app/configs:ro
       - ./strategies:/app/strategies:ro
       - ./scripts:/app/scripts:ro
       - ./utils:/app/utils:ro
@@ -226,8 +122,7 @@ services:
       - PYTHONUNBUFFERED=1
       - BACKEND_HOST=0.0.0.0
       - BACKEND_PORT=8230
-      - DATABASE_URL=postgresql://mlflow:mlflow_secure_password@postgres:5432/backend
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - DATABASE_URL=postgresql://mlflow:mlflow_secure_password@postgres:5432/trading
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     networks:
@@ -282,8 +177,6 @@ networks:
     driver: bridge
 
 volumes:
-  sqlite-data:
-    driver: local
   postgres-data:
     driver: local
   redis-data:
